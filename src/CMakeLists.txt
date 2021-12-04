@@ -1,3 +1,7 @@
-cmake_minimum_required(VERSION 3.0.0)
+cmake_minimum_required(VERSION 3.22.0)
 
-add_executable(Project-J main.cpp)
+set(SOURCE_LIST 
+    ${CMAKE_CURRENT_SOURCE_DIR}/main.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Vulkan/VulkanApp.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/core/Application.cpp
+PARENT_SCOPE)

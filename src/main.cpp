@@ -1,6 +1,9 @@
-#include <iostream>
+#include <Jpch.h>
+#include "core/Application.h"
 
-int main(){
-    std::cout<<"hello world!"<<std::endl;
+int main(char* argv,char** args) {
+    ProjectJ::AppInfo appInfo;
+    ProjectJ::Application app(appInfo);
+    app.Run();
     return 0;
 }
