@@ -1,5 +1,6 @@
 #include "Jpch.h"
 #include "Application.h"
+#include "../Vulkan/VulkanApp.h"
 
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
@@ -11,7 +12,7 @@
 
 namespace ProjectJ{
     Application::Application(const AppInfo& appInfo){
-        
+
     }
 
     void Application::Run(){ 
@@ -20,19 +21,16 @@ namespace ProjectJ{
         glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
         GLFWwindow* window = glfwCreateWindow(800, 600, "Vulkan window", nullptr, nullptr);
 
-        uint32_t extensionCount = 0;
-        vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, nullptr);
+        {
+            VulkanConfig config;
+            config.enableValidationLayer = true;
+            config.window = window;
+            VulkanRHI vkRHI(config);
 
-        std::cout << extensionCount << " extensions supported\n";
-
-        glm::mat4 matrix;
-        glm::vec4 vec;
-        auto test = matrix * vec;
-
-        while(!glfwWindowShouldClose(window)) {
-            glfwPollEvents();
+            while(!glfwWindowShouldClose(window)) {
+                glfwPollEvents();
+            }
         }
-
         glfwDestroyWindow(window);
 
         glfwTerminate();

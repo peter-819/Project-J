@@ -9,7 +9,7 @@ add_subdirectory(3rdparty)
 add_subdirectory(src)
 
 add_executable(Project-J ${SOURCE_LIST})
-
+target_compile_features(${PROJECT_NAME} PRIVATE cxx_std_17)
 # ----------------------THIRD_PARTY--------------------------#
 set(THIRDPARTY_DIR ${PROJECT_SOURCE_DIR}/3rdparty)
 
