@@ -29,6 +29,7 @@ namespace ProjectJ{
 
             while(!glfwWindowShouldClose(window)) {
                 glfwPollEvents();
+                vkRHI.Draw();
             }
         }
         glfwDestroyWindow(window);

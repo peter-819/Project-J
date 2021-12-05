@@ -10,7 +10,7 @@
 #define VK_CHECK(op,message) \
     do{\
         if((op) != VK_SUCCESS){ \
-            std::cout<<message<<std::endl;\
+            std::cout<<"LINE "<<__LINE__<<": "<<message<<std::endl;\
             throw std::runtime_error(message);\
         }\
     }while(0);

@@ -11,6 +11,7 @@ namespace ProjectJ{
     public:
         VulkanRHI(const VulkanConfig& config);
         ~VulkanRHI();
+        void Draw();
     private:
         void Init();
         void Cleanup();
@@ -26,7 +27,12 @@ namespace ProjectJ{
         void PCreateLogicalDevice();
         void PCreateSwapChain();
         void PCreateImageViews();
-
+        void PCreateRenderPass();
+        void PCreateGraphicsPipeline();
+        void PCreateFramebuffers();
+        void PCreateCommandPool();
+        void PCreateCommandBuffers();
+        void PCreateSyncObjects();
     private:
         VulkanConfig mConfig;
         VkInstance mInstance;
@@ -41,12 +47,26 @@ namespace ProjectJ{
         VkFormat mSwapChainImageFormat;
         VkExtent2D mSwapChainExtent;
         std::vector<VkImageView> mSwapChainImageViews;
+        VkPipelineLayout mPipelineLayout;
+        VkRenderPass mRenderPass;
+        VkPipeline mGraphicsPipeline;
+        VkCommandPool mCommandPool;
+
+        std::vector<VkSemaphore> mImageAvailableSemaphores;
+        std::vector<VkSemaphore> mRenderFinishedSemaphores;
+        std::vector<VkFence> mInFlightFences;
+        std::vector<VkFence> mImagesInFlight;
+        size_t mCurrentFrame = 0;
+    
+        std::vector<VkCommandBuffer> mCommandBuffers;
+        std::vector<VkFramebuffer> mSwapChainFramebuffers;
         const std::vector<const char*> mValidationLayers = {
             "VK_LAYER_KHRONOS_validation"
         };
         const std::vector<const char*> mDeviceExtensions = {
             VK_KHR_SWAPCHAIN_EXTENSION_NAME
         };
+        const int MAX_FRAMES_IN_FLIGHT = 2;
         struct QueueFamilyIndices{
             std::optional<uint32_t> graphicsFamily;
             std::optional<uint32_t> presentFamily;
