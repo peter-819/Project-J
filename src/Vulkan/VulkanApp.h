@@ -26,11 +26,15 @@ namespace ProjectJ{
         void PCreateSwapChain();
         void PCreateImageViews();
         void PCreateRenderPass();
+        void PCreateDescriptorSetLayout();
         void PCreateGraphicsPipeline();
         void PCreateFramebuffers();
         void PCreateCommandPool();
         void PCreateVertexBuffer();
         void PCreateIndexBuffer();
+        void PCreateUniformBuffer();
+        void PCreateDescriptorPool();
+        void PCreateDescriptorSet();
         void PCreateCommandBuffers();
         void PCreateSyncObjects();
 
@@ -58,6 +62,7 @@ namespace ProjectJ{
         VkFormat mSwapChainImageFormat;
         VkExtent2D mSwapChainExtent;
         std::vector<VkImageView> mSwapChainImageViews;
+        VkDescriptorSetLayout mDescriptorSetLayout;
         VkPipelineLayout mPipelineLayout;
         VkRenderPass mRenderPass;
         VkPipeline mGraphicsPipeline;
@@ -66,6 +71,11 @@ namespace ProjectJ{
         VkDeviceMemory mVertexBufferMemory;
         VkBuffer mIndexBuffer;
         VkDeviceMemory mIndexBufferMemory;
+        VkDescriptorPool mDescriptorPool;
+        std::vector<VkDescriptorSet> mDescriptorSets;
+
+        std::vector<VkBuffer> mUniformBuffers;
+        std::vector<VkDeviceMemory> mUniformBufferMemorys;
 
         std::vector<VkSemaphore> mImageAvailableSemaphores;
         std::vector<VkSemaphore> mRenderFinishedSemaphores;
@@ -108,6 +118,11 @@ namespace ProjectJ{
         };
         const std::vector<uint16_t> indices = {
             0,1,2,2,3,0
+        };
+        struct UniformBufferObject{
+            glm::mat4 model;
+            glm::mat4 view;
+            glm::mat4 proj;
         };
     };
 }

@@ -44,6 +44,23 @@ namespace ProjectJ{
             vkWaitForFences(mDevice,1,&mImagesInFlight[imageIndex],VK_TRUE,UINT64_MAX);
         }
         mImagesInFlight[imageIndex] = mImagesInFlight[mCurrentFrame];
+        
+        auto updateUniformBuffer = [this](uint32_t currentImage){
+            static auto startTime = std::chrono::high_resolution_clock::now();
+            auto currentTime = std::chrono::high_resolution_clock::now();
+            float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
+        
+            UniformBufferObject ubo{};
+            ubo.model = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+            ubo.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+            ubo.proj = glm::perspective(glm::radians(45.0f), mSwapChainExtent.width / (float) mSwapChainExtent.height, 0.1f, 10.0f);
+            ubo.proj[1][1] *= -1;
+            void* data;
+            vkMapMemory(mDevice, mUniformBufferMemorys[currentImage], 0, sizeof(ubo), 0, &data);
+            memcpy(data, &ubo, sizeof(ubo));
+            vkUnmapMemory(mDevice, mUniformBufferMemorys[currentImage]);
+        };
+        updateUniformBuffer(imageIndex);
         VkSubmitInfo submitInfo{};
         submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 
@@ -83,11 +100,15 @@ namespace ProjectJ{
         PCreateSwapChain();
         PCreateImageViews();
         PCreateRenderPass();
+        PCreateDescriptorSetLayout();
         PCreateGraphicsPipeline();
         PCreateFramebuffers();
         PCreateCommandPool();
         PCreateVertexBuffer();
         PCreateIndexBuffer();
+        PCreateUniformBuffer();
+        PCreateDescriptorPool();
+        PCreateDescriptorSet();
         PCreateCommandBuffers();
         PCreateSyncObjects();
     }
@@ -99,6 +120,13 @@ namespace ProjectJ{
 
         vkDestroyBuffer(mDevice,mVertexBuffer,nullptr);
         vkFreeMemory(mDevice,mVertexBufferMemory,nullptr);
+        
+        for(size_t i = 0; i < mSwapChainImages.size(); i++){
+            vkDestroyBuffer(mDevice,mUniformBuffers[i],nullptr);
+            vkFreeMemory(mDevice,mUniformBufferMemorys[i],nullptr);
+        }
+        vkDestroyDescriptorPool(mDevice,mDescriptorPool,nullptr);
+        vkDestroyDescriptorSetLayout(mDevice,mDescriptorSetLayout,nullptr);
         
         for(size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++){
             vkDestroySemaphore(mDevice,mRenderFinishedSemaphores[i],nullptr);
@@ -503,6 +531,21 @@ namespace ProjectJ{
         renderPassInfo.pDependencies = &dependency;
         VK_CHECK(vkCreateRenderPass(mDevice,&renderPassInfo,nullptr,&mRenderPass),"failed to create render pass.");
     }
+    void VulkanRHI::PCreateDescriptorSetLayout(){
+        VkDescriptorSetLayoutBinding uboLayoutBinding{};
+        uboLayoutBinding.binding = 0;
+        uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        uboLayoutBinding.descriptorCount = 1;
+        uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+        uboLayoutBinding.pImmutableSamplers = nullptr;
+        
+        VkDescriptorSetLayoutCreateInfo layoutInfo{};
+        layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+        layoutInfo.bindingCount = 1;
+        layoutInfo.pBindings = &uboLayoutBinding;
+        
+        VK_CHECK(vkCreateDescriptorSetLayout(mDevice,&layoutInfo,nullptr,&mDescriptorSetLayout),"failed to create descriptor set layout.");
+    }
     void VulkanRHI::PCreateGraphicsPipeline(){
         auto readFile = [](const std::string& filename) {
             std::ifstream file(filename,std::ios::ate | std::ios::binary);
@@ -598,7 +641,7 @@ namespace ProjectJ{
         rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
         rasterizer.lineWidth = 1.0f;
         rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
-        rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE;
+        rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
         rasterizer.depthBiasEnable = VK_FALSE;
         rasterizer.depthBiasConstantFactor = 0.0f; // Optional
         rasterizer.depthBiasClamp = 0.0f; // Optional
@@ -647,8 +690,8 @@ namespace ProjectJ{
 
         VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
         pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-        pipelineLayoutInfo.setLayoutCount = 0; // Optional
-        pipelineLayoutInfo.pSetLayouts = nullptr; // Optional
+        pipelineLayoutInfo.setLayoutCount = 1;
+        pipelineLayoutInfo.pSetLayouts = &mDescriptorSetLayout;
         pipelineLayoutInfo.pushConstantRangeCount = 0; // Optional
         pipelineLayoutInfo.pPushConstantRanges = nullptr; // Optional
 
@@ -761,6 +804,63 @@ namespace ProjectJ{
         vkDestroyBuffer(mDevice,stagingBuffer,nullptr);
         vkFreeMemory(mDevice,stagingBufferMemory,nullptr);
     }
+    void VulkanRHI::PCreateUniformBuffer(){
+        VkDeviceSize bufferSize = sizeof(UniformBufferObject);
+        mUniformBuffers.resize(mSwapChainImages.size());
+        mUniformBufferMemorys.resize(mSwapChainImages.size());
+        
+        for(size_t i = 0; i < mSwapChainImages.size(); i++){
+            HCreateBuffer(
+                bufferSize, 
+                VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+                VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+                VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                mUniformBuffers[i],
+                mUniformBufferMemorys[i]
+            );
+        }
+    }
+    void VulkanRHI::PCreateDescriptorPool(){
+        VkDescriptorPoolSize poolSize{};
+        poolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        poolSize.descriptorCount = static_cast<uint32_t>(mSwapChainImages.size());
+        
+        VkDescriptorPoolCreateInfo poolInfo{};
+        poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+        poolInfo.poolSizeCount = 1;
+        poolInfo.pPoolSizes = &poolSize;
+        poolInfo.maxSets = static_cast<uint32_t>(mSwapChainImages.size());
+        VK_CHECK(vkCreateDescriptorPool(mDevice,&poolInfo,nullptr,&mDescriptorPool),"failed to create descriptor pool.");
+    }
+    void VulkanRHI::PCreateDescriptorSet(){
+        std::vector<VkDescriptorSetLayout> layouts(mSwapChainImages.size(),mDescriptorSetLayout);
+        VkDescriptorSetAllocateInfo allocInfo{};
+        allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+        allocInfo.descriptorPool = mDescriptorPool;
+        allocInfo.descriptorSetCount = static_cast<uint32_t>(mSwapChainImages.size());
+        allocInfo.pSetLayouts = layouts.data();
+        
+        mDescriptorSets.resize(mSwapChainImages.size());
+        VK_CHECK(vkAllocateDescriptorSets(mDevice,&allocInfo,mDescriptorSets.data()),"failed to allocate descriptor sets");
+        for(size_t i = 0; i < mSwapChainImages.size(); i++){
+            VkDescriptorBufferInfo bufferInfo{};
+            bufferInfo.buffer = mUniformBuffers[i];
+            bufferInfo.offset = 0;
+            bufferInfo.range = sizeof(UniformBufferObject);
+
+            VkWriteDescriptorSet descriptorWrite{};
+            descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            descriptorWrite.dstSet = mDescriptorSets[i];
+            descriptorWrite.dstBinding = 0;
+            descriptorWrite.dstArrayElement = 0;
+            descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+            descriptorWrite.descriptorCount = 1;
+            descriptorWrite.pBufferInfo = &bufferInfo;
+            descriptorWrite.pImageInfo = nullptr; // Optional
+            descriptorWrite.pTexelBufferView = nullptr; // Optional
+            vkUpdateDescriptorSets(mDevice, 1, &descriptorWrite, 0, nullptr);
+        }
+    }
     void VulkanRHI::PCreateCommandBuffers(){
         mCommandBuffers.resize(mSwapChainFramebuffers.size());
         VkCommandBufferAllocateInfo allocInfo{};
@@ -794,6 +894,7 @@ namespace ProjectJ{
             vkCmdBindVertexBuffers(mCommandBuffers[i],0,1,vertexBuffers,offsets);
             vkCmdBindIndexBuffer(mCommandBuffers[i],mIndexBuffer,0,VK_INDEX_TYPE_UINT16);
 
+            vkCmdBindDescriptorSets(mCommandBuffers[i],VK_PIPELINE_BIND_POINT_GRAPHICS,mPipelineLayout,0,1,&mDescriptorSets[i],0,nullptr);
             vkCmdDrawIndexed(mCommandBuffers[i],static_cast<uint32_t>(indices.size()),1,0,0,0);
             vkCmdEndRenderPass(mCommandBuffers[i]);
 
