@@ -25,6 +25,7 @@ find_library(VULKAN_LIBS
 target_link_libraries(${PROJECT_NAME} 
     glfw ${GLFW_LIBRARIES}
     ${VULKAN_LIBS}
+    spdlog
 )
 
 target_include_directories(${PROJECT_NAME} 
