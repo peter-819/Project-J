@@ -18,9 +18,7 @@ namespace ProjectJ{
     
     private:
         void PCreateInstance();
-        bool pCheckValidationLayer();
-        std::vector<const char*> PGetRequiredExtensions();
-        VkDebugUtilsMessengerCreateInfoEXT PPopulateDebugMessengerCreateInfo() const;
+        bool PCheckValidationLayer();
         void PSetupDebugMessenger();
         void PCreateSurface();
         void PPickPhysicalDevice();
@@ -31,8 +29,21 @@ namespace ProjectJ{
         void PCreateGraphicsPipeline();
         void PCreateFramebuffers();
         void PCreateCommandPool();
+        void PCreateVertexBuffer();
+        void PCreateIndexBuffer();
         void PCreateCommandBuffers();
         void PCreateSyncObjects();
+
+        std::vector<const char*> HGetRequiredExtensions();
+        VkDebugUtilsMessengerCreateInfoEXT HPopulateDebugMessengerCreateInfo() const;
+        void HCreateBuffer(
+            VkDeviceSize size,
+            VkBufferUsageFlags usage,
+            VkMemoryPropertyFlags properties,
+            VkBuffer& buffer,
+            VkDeviceMemory& bufferMemory
+        );
+        void HCopyBuffer(VkBuffer srcBuffer,VkBuffer dstBuffer,VkDeviceSize size);
     private:
         VulkanConfig mConfig;
         VkInstance mInstance;
@@ -51,6 +62,10 @@ namespace ProjectJ{
         VkRenderPass mRenderPass;
         VkPipeline mGraphicsPipeline;
         VkCommandPool mCommandPool;
+        VkBuffer mVertexBuffer;
+        VkDeviceMemory mVertexBufferMemory;
+        VkBuffer mIndexBuffer;
+        VkDeviceMemory mIndexBufferMemory;
 
         std::vector<VkSemaphore> mImageAvailableSemaphores;
         std::vector<VkSemaphore> mRenderFinishedSemaphores;
@@ -86,10 +101,13 @@ namespace ProjectJ{
             glm::vec3 color;
         };
         const std::vector<Vertex> vertices = {  
-            {{0.0f, -0.5f}, {1.0f, 0.0f, 0.0f}},
-            {{0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}},
-            {{-0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}}
+            {{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
+            {{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
+            {{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
+            {{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}}
         };
-        //TBD
+        const std::vector<uint16_t> indices = {
+            0,1,2,2,3,0
+        };
     };
 }

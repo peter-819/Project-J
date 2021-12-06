@@ -86,11 +86,20 @@ namespace ProjectJ{
         PCreateGraphicsPipeline();
         PCreateFramebuffers();
         PCreateCommandPool();
+        PCreateVertexBuffer();
+        PCreateIndexBuffer();
         PCreateCommandBuffers();
         PCreateSyncObjects();
     }
     void VulkanRHI::Cleanup(){
         vkDeviceWaitIdle(mDevice);
+
+        vkDestroyBuffer(mDevice,mIndexBuffer,nullptr);
+        vkFreeMemory(mDevice,mIndexBufferMemory,nullptr);
+
+        vkDestroyBuffer(mDevice,mVertexBuffer,nullptr);
+        vkFreeMemory(mDevice,mVertexBufferMemory,nullptr);
+        
         for(size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++){
             vkDestroySemaphore(mDevice,mRenderFinishedSemaphores[i],nullptr);
             vkDestroySemaphore(mDevice,mImageAvailableSemaphores[i],nullptr);
@@ -116,7 +125,7 @@ namespace ProjectJ{
     }
     
     void VulkanRHI::PCreateInstance(){
-        if(mConfig.enableValidationLayer && !pCheckValidationLayer()) {
+        if(mConfig.enableValidationLayer && !PCheckValidationLayer()) {
             throw std::runtime_error("validation layer not available");
         }
         VkApplicationInfo appInfo{};
@@ -131,14 +140,14 @@ namespace ProjectJ{
         createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
         createInfo.pApplicationInfo = &appInfo;
 
-        auto requiredExtensions = PGetRequiredExtensions();
+        auto requiredExtensions = HGetRequiredExtensions();
         createInfo.enabledExtensionCount = static_cast<uint32_t>(requiredExtensions.size());
         createInfo.ppEnabledExtensionNames = requiredExtensions.data();
         if(mConfig.enableValidationLayer){
             createInfo.enabledLayerCount = static_cast<uint32_t>(mValidationLayers.size());
             createInfo.ppEnabledLayerNames = mValidationLayers.data();
 
-            auto dMessengerInfo = PPopulateDebugMessengerCreateInfo();
+            auto dMessengerInfo = HPopulateDebugMessengerCreateInfo();
             createInfo.pNext = (VkDebugUtilsMessengerCreateInfoEXT*)&dMessengerInfo;
         }
         else{
@@ -158,8 +167,7 @@ namespace ProjectJ{
             std::cout << '\t' << extension.extensionName << '\n';
         }
     }
-
-    bool VulkanRHI::pCheckValidationLayer(){
+    bool VulkanRHI::PCheckValidationLayer(){
         uint32_t layerCount;
         vkEnumerateInstanceLayerProperties(&layerCount,nullptr);
         std::vector<VkLayerProperties> avaliableLayers(layerCount);
@@ -178,7 +186,7 @@ namespace ProjectJ{
         }
         return true;
     }
-    std::vector<const char*> VulkanRHI::PGetRequiredExtensions(){
+    std::vector<const char*> VulkanRHI::HGetRequiredExtensions(){
         uint32_t glfwExtensionCount = 0;
         const char** glfwExtensions;
 
@@ -189,7 +197,7 @@ namespace ProjectJ{
         }
         return extensions;
     }
-    VkDebugUtilsMessengerCreateInfoEXT VulkanRHI::PPopulateDebugMessengerCreateInfo() const{
+    VkDebugUtilsMessengerCreateInfoEXT VulkanRHI::HPopulateDebugMessengerCreateInfo() const{
         VkDebugUtilsMessengerCreateInfoEXT createInfo{};
         createInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
         createInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
@@ -200,7 +208,7 @@ namespace ProjectJ{
     }
     void VulkanRHI::PSetupDebugMessenger(){
         if(!mConfig.enableValidationLayer) return;
-        auto createInfo = PPopulateDebugMessengerCreateInfo();
+        auto createInfo = HPopulateDebugMessengerCreateInfo();
         VK_CHECK(CreateDebugUtilsMessengerEXT(mInstance,&createInfo,nullptr,&mDebugMessenger),"failed to setup debug messenger.");
     }
     void VulkanRHI::PCreateSurface(){
@@ -536,12 +544,29 @@ namespace ProjectJ{
 
         VkPipelineShaderStageCreateInfo shaderStages[] = {vertShaderStageInfo, fragShaderStageInfo};
         
+        //Vertex Layout
+        VkVertexInputBindingDescription bindingDescription{};
+        bindingDescription.binding = 0;
+        bindingDescription.stride = sizeof(Vertex);
+        bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+
+        std::array<VkVertexInputAttributeDescription, 2> attributeDescription;
+        attributeDescription[0].binding = 0;
+        attributeDescription[0].location = 0;
+        attributeDescription[0].format = VK_FORMAT_R32G32_SFLOAT;
+        attributeDescription[0].offset = offsetof(Vertex,pos);
+
+        attributeDescription[1].binding = 0;
+        attributeDescription[1].location = 1;
+        attributeDescription[1].format = VK_FORMAT_R32G32B32_SFLOAT;
+        attributeDescription[1].offset = offsetof(Vertex,color);
+        
         VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
         vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-        vertexInputInfo.vertexBindingDescriptionCount = 0;
-        vertexInputInfo.pVertexBindingDescriptions = nullptr; // Optional
-        vertexInputInfo.vertexAttributeDescriptionCount = 0;
-        vertexInputInfo.pVertexAttributeDescriptions = nullptr; // Op
+        vertexInputInfo.vertexBindingDescriptionCount = 1;
+        vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescription.size()); // Optional
+        vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
+        vertexInputInfo.pVertexAttributeDescriptions = attributeDescription.data(); // Op
         
         VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
         inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
@@ -678,6 +703,64 @@ namespace ProjectJ{
         poolInfo.flags = 0;
         VK_CHECK(vkCreateCommandPool(mDevice,&poolInfo,nullptr,&mCommandPool),"failed to create command pool.");
     }
+    void VulkanRHI::PCreateVertexBuffer(){
+        VkDeviceSize bufferSize = sizeof(vertices[0]) * vertices.size();
+        VkBuffer stagingBuffer;
+        VkDeviceMemory stagingBufferMemory;
+        
+        HCreateBuffer(
+            bufferSize,
+            VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+            stagingBuffer,
+            stagingBufferMemory
+        );
+
+        void* data;
+        vkMapMemory(mDevice,stagingBufferMemory,0,bufferSize,0,&data);
+        memcpy(data,vertices.data(),(size_t)(bufferSize));
+        vkUnmapMemory(mDevice,stagingBufferMemory);
+
+        HCreateBuffer(
+            bufferSize,
+            VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+            mVertexBuffer,
+            mVertexBufferMemory
+        );  
+        HCopyBuffer(stagingBuffer,mVertexBuffer,bufferSize);
+        vkDestroyBuffer(mDevice,stagingBuffer,nullptr);
+        vkFreeMemory(mDevice,stagingBufferMemory,nullptr);
+    }
+    void VulkanRHI::PCreateIndexBuffer(){
+        VkDeviceSize bufferSize = sizeof(indices[0]) * indices.size();
+        VkBuffer stagingBuffer;
+        VkDeviceMemory stagingBufferMemory;
+        
+        HCreateBuffer(
+            bufferSize,
+            VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+            stagingBuffer,
+            stagingBufferMemory
+        );
+
+        void* data;
+        vkMapMemory(mDevice,stagingBufferMemory,0,bufferSize,0,&data);
+        memcpy(data,indices.data(),(size_t)(bufferSize));
+        vkUnmapMemory(mDevice,stagingBufferMemory);
+
+        HCreateBuffer(
+            bufferSize,
+            VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+            mIndexBuffer,
+            mIndexBufferMemory
+        );  
+        HCopyBuffer(stagingBuffer,mIndexBuffer,bufferSize);
+        vkDestroyBuffer(mDevice,stagingBuffer,nullptr);
+        vkFreeMemory(mDevice,stagingBufferMemory,nullptr);
+    }
     void VulkanRHI::PCreateCommandBuffers(){
         mCommandBuffers.resize(mSwapChainFramebuffers.size());
         VkCommandBufferAllocateInfo allocInfo{};
@@ -705,7 +788,13 @@ namespace ProjectJ{
             vkCmdBeginRenderPass(mCommandBuffers[i], &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
        
             vkCmdBindPipeline(mCommandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, mGraphicsPipeline);
-            vkCmdDraw(mCommandBuffers[i], 3, 1, 0, 0);
+            
+            VkBuffer vertexBuffers[] = {mVertexBuffer};
+            VkDeviceSize offsets[] = {0};
+            vkCmdBindVertexBuffers(mCommandBuffers[i],0,1,vertexBuffers,offsets);
+            vkCmdBindIndexBuffer(mCommandBuffers[i],mIndexBuffer,0,VK_INDEX_TYPE_UINT16);
+
+            vkCmdDrawIndexed(mCommandBuffers[i],static_cast<uint32_t>(indices.size()),1,0,0,0);
             vkCmdEndRenderPass(mCommandBuffers[i]);
 
             VK_CHECK(vkEndCommandBuffer(mCommandBuffers[i]),"failed to record command buffer.");
@@ -729,5 +818,67 @@ namespace ProjectJ{
             VK_CHECK(vkCreateSemaphore(mDevice,&semaphoreInfo,nullptr,&mRenderFinishedSemaphores[i]),"failed to create semaphores.");    
             VK_CHECK(vkCreateFence(mDevice,&fenceInfo,nullptr,&mInFlightFences[i]),"failed to create fence.");
         }
+    }
+    void VulkanRHI::HCreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage,VkMemoryPropertyFlags properties,VkBuffer& buffer,VkDeviceMemory& bufferMemory){
+        VkBufferCreateInfo bufferInfo{};
+        bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        bufferInfo.size = size;
+        bufferInfo.usage = usage;
+        bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+        VK_CHECK(vkCreateBuffer(mDevice,&bufferInfo,nullptr,&buffer),"failed to create vertex buffer.");
+
+        VkMemoryRequirements memRequirements;
+        vkGetBufferMemoryRequirements(mDevice,buffer,&memRequirements);
+        auto findMemoryType = [this](uint32_t typeFilter, VkMemoryPropertyFlags properties){
+            VkPhysicalDeviceMemoryProperties memProperties;
+            vkGetPhysicalDeviceMemoryProperties(mPhysicalDevice,&memProperties);
+            for(uint32_t i = 0; i < memProperties.memoryTypeCount; i++){
+                if(typeFilter & (1 << i) && (memProperties.memoryTypes[i].propertyFlags & properties) == properties){
+                    return i;
+                }
+            }
+            throw std::runtime_error("failed to find suitable memory type.");
+        };
+
+        VkMemoryAllocateInfo allocInfo{};
+        allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+        allocInfo.allocationSize = memRequirements.size;
+        allocInfo.memoryTypeIndex = findMemoryType(
+            memRequirements.memoryTypeBits,
+            properties
+        );
+        VK_CHECK(vkAllocateMemory(mDevice,&allocInfo,nullptr,&bufferMemory),"failed to allocate vertex buffer memory.");
+        vkBindBufferMemory(mDevice,buffer,bufferMemory,0);
+    }
+    void VulkanRHI::HCopyBuffer(VkBuffer srcBuffer,VkBuffer dstBuffer,VkDeviceSize size){
+        VkCommandBufferAllocateInfo allocInfo{};
+        allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+        allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+        allocInfo.commandPool = mCommandPool;
+        allocInfo.commandBufferCount = 1;
+        VkCommandBuffer commandBuffer;
+        vkAllocateCommandBuffers(mDevice,&allocInfo,&commandBuffer);
+        
+        VkCommandBufferBeginInfo beginInfo{};
+        beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+        vkBeginCommandBuffer(commandBuffer,&beginInfo);
+
+        VkBufferCopy copyRegion{};
+        copyRegion.srcOffset = 0;
+        copyRegion.dstOffset = 0;
+        copyRegion.size = size;
+        vkCmdCopyBuffer(commandBuffer,srcBuffer,dstBuffer,1,&copyRegion);
+        vkEndCommandBuffer(commandBuffer);
+        
+        VkSubmitInfo submitInfo{};
+        submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+        submitInfo.commandBufferCount = 1;
+        submitInfo.pCommandBuffers = &commandBuffer;
+
+        vkQueueSubmit(mGraphicQueue,1,&submitInfo,VK_NULL_HANDLE);
+        vkQueueWaitIdle(mGraphicQueue);
+        vkFreeCommandBuffers(mDevice,mCommandPool,1,&commandBuffer);
     }
 }
