@@ -39,7 +39,8 @@ namespace ProjectJ{
     void VulkanRHI::Draw(){
         vkWaitForFences(mDevice,1,&mInFlightFences[mCurrentFrame],VK_TRUE,UINT64_MAX);
         uint32_t imageIndex;
-        vkAcquireNextImageKHR(mDevice,mSwapChain,UINT64_MAX,mImageAvailableSemaphores[mCurrentFrame],VK_NULL_HANDLE,&imageIndex);
+        //vkAcquireNextImageKHR(mDevice,mSwapChain,UINT64_MAX,mImageAvailableSemaphores[mCurrentFrame],VK_NULL_HANDLE,&imageIndex);
+        imageIndex = mSwapChain->AcquireNextImage(mImageAvailableSemaphores[mCurrentFrame]);
         if(mImagesInFlight[imageIndex] != VK_NULL_HANDLE){
             vkWaitForFences(mDevice,1,&mImagesInFlight[imageIndex],VK_TRUE,UINT64_MAX);
         }
@@ -53,7 +54,7 @@ namespace ProjectJ{
             UniformBufferObject ubo{};
             ubo.model = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
             ubo.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-            ubo.proj = glm::perspective(glm::radians(45.0f), mSwapChainExtent.width / (float) mSwapChainExtent.height, 0.1f, 10.0f);
+            ubo.proj = glm::perspective(glm::radians(45.0f), mSwapChain->GetExtent().width / (float) mSwapChain->GetExtent().height, 0.1f, 10.0f);
             ubo.proj[1][1] *= -1;
             void* data;
             vkMapMemory(mDevice, mUniformBufferMemorys[currentImage], 0, sizeof(ubo), 0, &data);
@@ -78,17 +79,7 @@ namespace ProjectJ{
         vkResetFences(mDevice,1,&mInFlightFences[mCurrentFrame]);
         VK_CHECK(vkQueueSubmit(mGraphicQueue,1,&submitInfo,mInFlightFences[mCurrentFrame]),"failed to submit draw command buffer.");
 
-        VkPresentInfoKHR presentInfo{};
-        presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-
-        presentInfo.waitSemaphoreCount = 1;
-        presentInfo.pWaitSemaphores = signalSemaphores;
-        VkSwapchainKHR swapChains[] = {mSwapChain};
-        presentInfo.swapchainCount = 1;
-        presentInfo.pSwapchains = swapChains;
-        presentInfo.pImageIndices = &imageIndex;
-        presentInfo.pResults = nullptr; // Optional
-        vkQueuePresentKHR(mPresentQueue, &presentInfo);
+        mSwapChain->Present(mPresentQueue,mRenderFinishedSemaphores[mCurrentFrame]);
         mCurrentFrame = (mCurrentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
     }
     void VulkanRHI::Init(){
@@ -97,8 +88,9 @@ namespace ProjectJ{
         PCreateSurface();
         PPickPhysicalDevice();
         PCreateLogicalDevice();
-        PCreateSwapChain();
-        PCreateImageViews();
+        VulkanSwapChainDesc desc{};
+        desc.window = mConfig.window;
+        mSwapChain = std::make_shared<VulkanSwapChain>(mDevice,mPhysicalDevice,mSurface,mQueueFamilyIndices,desc);
         PCreateRenderPass();
         PCreateDescriptorSetLayout();
         PCreateGraphicsPipeline();
@@ -121,7 +113,7 @@ namespace ProjectJ{
         vkDestroyBuffer(mDevice,mVertexBuffer,nullptr);
         vkFreeMemory(mDevice,mVertexBufferMemory,nullptr);
         
-        for(size_t i = 0; i < mSwapChainImages.size(); i++){
+        for(size_t i = 0; i < mSwapChain->GetImageCount(); i++){
             vkDestroyBuffer(mDevice,mUniformBuffers[i],nullptr);
             vkFreeMemory(mDevice,mUniformBufferMemorys[i],nullptr);
         }
@@ -140,10 +132,7 @@ namespace ProjectJ{
         vkDestroyPipeline(mDevice,mGraphicsPipeline,nullptr);
         vkDestroyPipelineLayout(mDevice,mPipelineLayout,nullptr);
         vkDestroyRenderPass(mDevice,mRenderPass,nullptr);
-        for(auto imageView : mSwapChainImageViews){
-            vkDestroyImageView(mDevice,imageView,nullptr);
-        }
-        vkDestroySwapchainKHR(mDevice,mSwapChain,nullptr);
+        mSwapChain.reset();
         vkDestroyDevice(mDevice,nullptr);
         if (mConfig.enableValidationLayer) {
             DestroyDebugUtilsMessengerEXT(mInstance, mDebugMessenger, nullptr);
@@ -391,110 +380,9 @@ namespace ProjectJ{
         vkGetDeviceQueue(mDevice,mQueueFamilyIndices.graphicsFamily.value(),0,&mGraphicQueue);
         vkGetDeviceQueue(mDevice,mQueueFamilyIndices.presentFamily.value(),0,&mPresentQueue);
     }
-    void VulkanRHI::PCreateSwapChain(){
-        auto chooseSwapSurfaceFormat = [](const std::vector<VkSurfaceFormatKHR>& availableFormats){
-            for(const auto& aFormat : availableFormats){
-                if(aFormat.format == VK_FORMAT_B8G8R8A8_SRGB && aFormat.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR){
-                    return aFormat;
-                }
-            }
-            return availableFormats[0];
-        };
-        auto chooseSwapPresentMode = [](const std::vector<VkPresentModeKHR>& availablePresentModes){
-            for(const auto& aMode : availablePresentModes){
-                if(aMode == VK_PRESENT_MODE_MAILBOX_KHR){
-                    return aMode;
-                }
-            }
-            return VK_PRESENT_MODE_FIFO_KHR;
-        };
-        auto chooseSwapExtent = [this](const VkSurfaceCapabilitiesKHR& capabilities){
-            if(capabilities.currentExtent.width != UINT32_MAX){
-                return capabilities.currentExtent;
-            }
-            else{
-                int width,height;
-                glfwGetFramebufferSize(mConfig.window,&width,&height);
-
-                VkExtent2D actualExtent = {
-                    static_cast<uint32_t>(width),
-                    static_cast<uint32_t>(height)
-                };
-                actualExtent.width = std::clamp(actualExtent.width, capabilities.minImageExtent.width, capabilities.maxImageExtent.width);
-                actualExtent.height = std::clamp(actualExtent.height, capabilities.minImageExtent.height, capabilities.maxImageExtent.height);
-                return actualExtent;
-            }
-        };
-        
-        auto surfaceFormat = chooseSwapSurfaceFormat(mSwapChainSupportDetails.formats);
-        auto presentMode = chooseSwapPresentMode(mSwapChainSupportDetails.presentModes);
-        auto extent = chooseSwapExtent(mSwapChainSupportDetails.capabilities);
-
-        uint32_t imageCount = mSwapChainSupportDetails.capabilities.minImageCount + 1;
-        if (mSwapChainSupportDetails.capabilities.maxImageCount > 0 && imageCount > mSwapChainSupportDetails.capabilities.maxImageCount) {
-            imageCount = mSwapChainSupportDetails.capabilities.maxImageCount;
-        }
-
-        VkSwapchainCreateInfoKHR createInfo{};
-        createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-        createInfo.surface = mSurface;
-        createInfo.minImageCount = imageCount;
-        createInfo.imageFormat = surfaceFormat.format;
-        createInfo.imageColorSpace = surfaceFormat.colorSpace;
-        createInfo.imageExtent = extent;
-        createInfo.imageArrayLayers = 1;
-        createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-        uint32_t queueFamilyIndices[] = {mQueueFamilyIndices.graphicsFamily.value(), mQueueFamilyIndices.presentFamily.value()};
-
-        if (mQueueFamilyIndices.graphicsFamily != mQueueFamilyIndices.presentFamily) {
-            createInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
-            createInfo.queueFamilyIndexCount = 2;
-            createInfo.pQueueFamilyIndices = queueFamilyIndices;
-        } 
-        else {
-            createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
-            createInfo.queueFamilyIndexCount = 0; // Optional
-            createInfo.pQueueFamilyIndices = nullptr; // Optional
-        }
-
-        createInfo.preTransform = mSwapChainSupportDetails.capabilities.currentTransform;
-        createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-        createInfo.presentMode = presentMode;
-        createInfo.clipped = VK_TRUE;
-        createInfo.oldSwapchain = VK_NULL_HANDLE;
-        VK_CHECK(vkCreateSwapchainKHR(mDevice,&createInfo,nullptr,&mSwapChain),"failed to create swap chain.");
-
-        vkGetSwapchainImagesKHR(mDevice, mSwapChain, &imageCount, nullptr);
-        mSwapChainImages.resize(imageCount);
-        vkGetSwapchainImagesKHR(mDevice, mSwapChain, &imageCount, mSwapChainImages.data());
-
-        mSwapChainImageFormat = surfaceFormat.format;
-        mSwapChainExtent = extent;
-    }
-    void VulkanRHI::PCreateImageViews(){
-        mSwapChainImageViews.resize(mSwapChainImages.size());
-        for(size_t i = 0; i < mSwapChainImages.size(); i++){
-            VkImageViewCreateInfo createInfo{};
-            createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-            createInfo.image = mSwapChainImages[i];
-            createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-            createInfo.format = mSwapChainImageFormat;
-            createInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
-            createInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
-            createInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
-            createInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
-            createInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-            createInfo.subresourceRange.baseMipLevel = 0;
-            createInfo.subresourceRange.levelCount = 1;
-            createInfo.subresourceRange.baseArrayLayer = 0;
-            createInfo.subresourceRange.layerCount = 1;
-            VK_CHECK(vkCreateImageView(mDevice,&createInfo,nullptr,&mSwapChainImageViews[i]),"failed to create image views.");
-            
-        }
-    }
     void VulkanRHI::PCreateRenderPass(){
         VkAttachmentDescription colorAttachment{};
-        colorAttachment.format = mSwapChainImageFormat;
+        colorAttachment.format = mSwapChain->GetFormat();
         colorAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
         colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
         colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
@@ -619,13 +507,14 @@ namespace ProjectJ{
         VkViewport viewport{};
         viewport.x = 0.0f;
         viewport.y = 0.0f;
-        viewport.width = (float) mSwapChainExtent.width;
-        viewport.height = (float) mSwapChainExtent.height;
+
+        viewport.width = (float) mSwapChain->GetExtent().width;
+        viewport.height = (float) mSwapChain->GetExtent().height;
         viewport.minDepth = 0.0f;
         viewport.maxDepth = 1.0f;
         VkRect2D scissor{};
         scissor.offset = {0, 0};
-        scissor.extent = mSwapChainExtent;
+        scissor.extent = mSwapChain->GetExtent();
 
         VkPipelineViewportStateCreateInfo viewportState{};
         viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
@@ -722,18 +611,18 @@ namespace ProjectJ{
 
     }
     void VulkanRHI::PCreateFramebuffers(){
-        mSwapChainFramebuffers.resize(mSwapChainImageViews.size());
-        for(size_t i = 0; i< mSwapChainImageViews.size(); i++){
+        mSwapChainFramebuffers.resize(mSwapChain->GetImageCount());
+        for(size_t i = 0; i< mSwapChain->GetImageCount(); i++){
             VkImageView attachments[] = {
-                mSwapChainImageViews[i]
+                mSwapChain->GetImageViews()[i]
             };
             VkFramebufferCreateInfo framebufferInfo{};
             framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
             framebufferInfo.renderPass = mRenderPass;
             framebufferInfo.attachmentCount = 1;
             framebufferInfo.pAttachments = attachments;
-            framebufferInfo.width = mSwapChainExtent.width;
-            framebufferInfo.height = mSwapChainExtent.height;
+            framebufferInfo.width = mSwapChain->GetExtent().width;
+            framebufferInfo.height = mSwapChain->GetExtent().height;
             framebufferInfo.layers = 1;
             VK_CHECK(vkCreateFramebuffer(mDevice,&framebufferInfo,nullptr,&mSwapChainFramebuffers[i]),"failed to create framebuffer.");
             
@@ -806,10 +695,10 @@ namespace ProjectJ{
     }
     void VulkanRHI::PCreateUniformBuffer(){
         VkDeviceSize bufferSize = sizeof(UniformBufferObject);
-        mUniformBuffers.resize(mSwapChainImages.size());
-        mUniformBufferMemorys.resize(mSwapChainImages.size());
+        mUniformBuffers.resize(mSwapChain->GetImageCount());
+        mUniformBufferMemorys.resize(mSwapChain->GetImageCount());
         
-        for(size_t i = 0; i < mSwapChainImages.size(); i++){
+        for(size_t i = 0; i < mSwapChain->GetImageCount(); i++){
             HCreateBuffer(
                 bufferSize, 
                 VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
@@ -823,26 +712,26 @@ namespace ProjectJ{
     void VulkanRHI::PCreateDescriptorPool(){
         VkDescriptorPoolSize poolSize{};
         poolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        poolSize.descriptorCount = static_cast<uint32_t>(mSwapChainImages.size());
+        poolSize.descriptorCount = static_cast<uint32_t>(mSwapChain->GetImageCount());
         
         VkDescriptorPoolCreateInfo poolInfo{};
         poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
         poolInfo.poolSizeCount = 1;
         poolInfo.pPoolSizes = &poolSize;
-        poolInfo.maxSets = static_cast<uint32_t>(mSwapChainImages.size());
+        poolInfo.maxSets = static_cast<uint32_t>(mSwapChain->GetImageCount());
         VK_CHECK(vkCreateDescriptorPool(mDevice,&poolInfo,nullptr,&mDescriptorPool),"failed to create descriptor pool.");
     }
     void VulkanRHI::PCreateDescriptorSet(){
-        std::vector<VkDescriptorSetLayout> layouts(mSwapChainImages.size(),mDescriptorSetLayout);
+        std::vector<VkDescriptorSetLayout> layouts(mSwapChain->GetImageCount(),mDescriptorSetLayout);
         VkDescriptorSetAllocateInfo allocInfo{};
         allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
         allocInfo.descriptorPool = mDescriptorPool;
-        allocInfo.descriptorSetCount = static_cast<uint32_t>(mSwapChainImages.size());
+        allocInfo.descriptorSetCount = static_cast<uint32_t>(mSwapChain->GetImageCount());
         allocInfo.pSetLayouts = layouts.data();
         
-        mDescriptorSets.resize(mSwapChainImages.size());
+        mDescriptorSets.resize(mSwapChain->GetImageCount());
         VK_CHECK(vkAllocateDescriptorSets(mDevice,&allocInfo,mDescriptorSets.data()),"failed to allocate descriptor sets");
-        for(size_t i = 0; i < mSwapChainImages.size(); i++){
+        for(size_t i = 0; i < mSwapChain->GetImageCount(); i++){
             VkDescriptorBufferInfo bufferInfo{};
             bufferInfo.buffer = mUniformBuffers[i];
             bufferInfo.offset = 0;
@@ -881,7 +770,7 @@ namespace ProjectJ{
             renderPassInfo.renderPass = mRenderPass;
             renderPassInfo.framebuffer = mSwapChainFramebuffers[i];
             renderPassInfo.renderArea.offset = {0,0};
-            renderPassInfo.renderArea.extent = mSwapChainExtent;
+            renderPassInfo.renderArea.extent = mSwapChain->GetExtent();
             VkClearValue clearColor = {{{0.0f, 0.0f, 0.0f, 1.0f}}};
             renderPassInfo.clearValueCount = 1;
             renderPassInfo.pClearValues = &clearColor;
@@ -905,7 +794,7 @@ namespace ProjectJ{
         mImageAvailableSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
         mRenderFinishedSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
         mInFlightFences.resize(MAX_FRAMES_IN_FLIGHT);
-        mImagesInFlight.resize(mSwapChainImages.size(),VK_NULL_HANDLE);
+        mImagesInFlight.resize(mSwapChain->GetImageCount(),VK_NULL_HANDLE);
 
         VkSemaphoreCreateInfo semaphoreInfo{};
         semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;

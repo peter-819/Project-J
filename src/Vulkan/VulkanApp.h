@@ -1,11 +1,12 @@
 #pragma once
-#include "VulkanInclude.h"
+#include "VulkanDescs.h"
+#include "VulkanSwapChain.h"
 #include <optional>
 
 namespace ProjectJ{
     struct VulkanConfig{
         bool enableValidationLayer;
-        GLFWwindow* window;
+        J_WINDOW_HANDLE window;
     };
     class VulkanRHI{
     public:
@@ -15,7 +16,7 @@ namespace ProjectJ{
     private:
         void Init();
         void Cleanup();
-    
+
     private:
         void PCreateInstance();
         bool PCheckValidationLayer();
@@ -23,8 +24,6 @@ namespace ProjectJ{
         void PCreateSurface();
         void PPickPhysicalDevice();
         void PCreateLogicalDevice();
-        void PCreateSwapChain();
-        void PCreateImageViews();
         void PCreateRenderPass();
         void PCreateDescriptorSetLayout();
         void PCreateGraphicsPipeline();
@@ -57,11 +56,8 @@ namespace ProjectJ{
         VkQueue mGraphicQueue;
         VkQueue mPresentQueue;
         VkSurfaceKHR mSurface;
-        VkSwapchainKHR mSwapChain;
-        std::vector<VkImage> mSwapChainImages;
-        VkFormat mSwapChainImageFormat;
-        VkExtent2D mSwapChainExtent;
-        std::vector<VkImageView> mSwapChainImageViews;
+        
+        std::vector<VkFramebuffer> mSwapChainFramebuffers;
         VkDescriptorSetLayout mDescriptorSetLayout;
         VkPipelineLayout mPipelineLayout;
         VkRenderPass mRenderPass;
@@ -82,9 +78,8 @@ namespace ProjectJ{
         std::vector<VkFence> mInFlightFences;
         std::vector<VkFence> mImagesInFlight;
         size_t mCurrentFrame = 0;
-    
+
         std::vector<VkCommandBuffer> mCommandBuffers;
-        std::vector<VkFramebuffer> mSwapChainFramebuffers;
         const std::vector<const char*> mValidationLayers = {
             "VK_LAYER_KHRONOS_validation"
         };
@@ -92,25 +87,10 @@ namespace ProjectJ{
             VK_KHR_SWAPCHAIN_EXTENSION_NAME
         };
         const int MAX_FRAMES_IN_FLIGHT = 2;
-        struct QueueFamilyIndices{
-            std::optional<uint32_t> graphicsFamily;
-            std::optional<uint32_t> presentFamily;
-            inline bool IsComplete() const {
-                return graphicsFamily.has_value()
-                    && presentFamily.has_value();
-            }
-        }mQueueFamilyIndices;
-        struct SwapChainSupportDetails{
-            VkSurfaceCapabilitiesKHR capabilities;
-            std::vector<VkSurfaceFormatKHR> formats;
-            std::vector<VkPresentModeKHR> presentModes;
-        }mSwapChainSupportDetails;
+        QueueFamilyIndices mQueueFamilyIndices;
+        SwapChainSupportDetails mSwapChainSupportDetails;
 
-        struct Vertex{
-            glm::vec2 pos;
-            glm::vec3 color;
-        };
-        const std::vector<Vertex> vertices = {  
+        const std::vector<Vertex> vertices = {
             {{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
             {{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
             {{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
@@ -119,10 +99,8 @@ namespace ProjectJ{
         const std::vector<uint16_t> indices = {
             0,1,2,2,3,0
         };
-        struct UniformBufferObject{
-            glm::mat4 model;
-            glm::mat4 view;
-            glm::mat4 proj;
-        };
+    private:
+        std::shared_ptr<VulkanSwapChain> mSwapChain;
     };
+
 }

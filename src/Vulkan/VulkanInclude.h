@@ -1,10 +1,5 @@
 
-#define VK_USE_PLATFORM_WIN32_KHR
-#define GLFW_INCLUDE_VULKAN
-//TODO: This should be included in window manager
-#include "GLFW/glfw3.h"
-#define GLFW_EXPOSE_NATIVE_WIN32
-#include <GLFW/glfw3native.h>
+#include <core/PlatformInclude.h>
 #include <Vulkan/vulkan.h>
 
 #define GLM_FORCE_RADIANS

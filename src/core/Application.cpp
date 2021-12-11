@@ -13,7 +13,6 @@ namespace ProjectJ{
     Application::Application(const AppInfo& appInfo){
 
     }
-
     void Application::Run(){ 
         Logger::InitGlobally();
         JLOG_INFO("HI, J-Project");
