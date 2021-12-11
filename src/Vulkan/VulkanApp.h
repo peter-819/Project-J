@@ -1,6 +1,8 @@
 #pragma once
 #include "VulkanDescs.h"
 #include "VulkanSwapChain.h"
+#include "VulkanBuffers.h"
+#include "VulkanPSO.h"
 #include <optional>
 
 namespace ProjectJ{
@@ -61,7 +63,7 @@ namespace ProjectJ{
         VkDescriptorSetLayout mDescriptorSetLayout;
         VkPipelineLayout mPipelineLayout;
         VkRenderPass mRenderPass;
-        VkPipeline mGraphicsPipeline;
+        // VkPipeline mGraphicsPipeline;
         VkCommandPool mCommandPool;
         VkBuffer mVertexBuffer;
         VkDeviceMemory mVertexBufferMemory;
@@ -101,6 +103,7 @@ namespace ProjectJ{
         };
     private:
         std::shared_ptr<VulkanSwapChain> mSwapChain;
+        std::shared_ptr<VulkanPSO> mGraphicPipeline;
     };
 
 }
