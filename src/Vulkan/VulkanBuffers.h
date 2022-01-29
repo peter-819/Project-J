@@ -6,8 +6,7 @@ namespace ProjectJ{
     class VulkanBufferBase{
     public:
         VulkanBufferBase() = delete;
-        VulkanBufferBase(VkDevice device, VkPhysicalDevice physicalDevice, 
-            VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties);
+        VulkanBufferBase(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties);
         ~VulkanBufferBase();
     protected:
         VkBuffer mBuffer;
@@ -15,12 +14,11 @@ namespace ProjectJ{
         VkDevice mDevice;
         VkPhysicalDevice mPhysicalDevice;
     };
-
     template<class TUniformBufferClass, uint32_t Size = sizeof TUniformBufferClass>
     class VulkanUniformBuffer : public VulkanBufferBase{
     public:
-        VulkanUniformBuffer(VkDevice device, VkPhysicalDevice physicalDevice)
-            :VulkanBufferBase(device, physicalDevice, Size,
+        VulkanUniformBuffer()
+            :VulkanBufferBase(Size,
             VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
             VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT){
                 
@@ -45,5 +43,15 @@ namespace ProjectJ{
         }
     private:
         TUniformBufferClass mCpuBuffer;
+    };
+
+    // class VulkanStagingBuffer : public VulkanBufferBase{
+        
+    // }
+    class VulkanVertexBuffer : public VulkanBufferBase{
+    public:
+        VulkanVertexBuffer(VkDevice device, VkPhysicalDevice physicalDevice, void* data, uint32_t size);
+        VulkanVertexBuffer(VkDevice device, VkPhysicalDevice physicalDevice, uint32_t size);
+        
     };
 }

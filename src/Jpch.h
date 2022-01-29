@@ -20,3 +20,4 @@
 #include <optional>
 
 #include "core/Logger.h"
+#include "core/RHI.h"

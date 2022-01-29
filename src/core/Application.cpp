@@ -1,7 +1,6 @@
 #include "Jpch.h"
 #include "Application.h"
-#include "../Vulkan/VulkanApp.h"
-
+#include "RHI.h"
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
@@ -10,6 +9,7 @@
 #include <glm/vec4.hpp>
 #include <glm/mat4x4.hpp>
 namespace ProjectJ{
+    RHIType* RHI::gInstance = nullptr;
     Application::Application(const AppInfo& appInfo){
 
     }
@@ -22,16 +22,16 @@ namespace ProjectJ{
         GLFWwindow* window = glfwCreateWindow(800, 600, "Vulkan window", nullptr, nullptr);
 
         {
-            VulkanConfig config;
+            RHIConfig config;
             config.enableValidationLayer = true;
             config.window = window;
-            VulkanRHI vkRHI(config);
-
+            RHI::Create(config);
             while(!glfwWindowShouldClose(window)) {
                 glfwPollEvents();
-                vkRHI.Draw();
+                RHI::Get().Draw();
             }
         }
+        RHI::Destroy();
         glfwDestroyWindow(window);
 
         glfwTerminate();

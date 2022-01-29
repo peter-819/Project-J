@@ -6,16 +6,18 @@
 #include <optional>
 
 namespace ProjectJ{
+    class RHI;
     struct VulkanConfig{
         bool enableValidationLayer;
         J_WINDOW_HANDLE window;
     };
     class VulkanRHI{
+        friend class VulkanBufferBase;
     public:
         VulkanRHI(const VulkanConfig& config);
         ~VulkanRHI();
         void Draw();
-    private:
+    public:
         void Init();
         void Cleanup();
 

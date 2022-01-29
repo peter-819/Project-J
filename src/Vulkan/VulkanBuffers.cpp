@@ -1,11 +1,11 @@
 #include <Jpch.h>
 #include "VulkanBuffers.h"
-
 namespace ProjectJ{
-    VulkanBufferBase::VulkanBufferBase(VkDevice device, VkPhysicalDevice physicalDevice, 
-            VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties)
-        : mDevice(device), mPhysicalDevice(physicalDevice) 
+    VulkanBufferBase::VulkanBufferBase(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties)
     {
+        mDevice = RHI::Get().mDevice;
+        mPhysicalDevice = RHI::Get().mPhysicalDevice;
+        
         VkBufferCreateInfo bufferInfo{};
         bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
         bufferInfo.size = size;

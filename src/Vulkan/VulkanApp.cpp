@@ -31,10 +31,8 @@ void DestroyDebugUtilsMessengerEXT(VkInstance instance, VkDebugUtilsMessengerEXT
 namespace ProjectJ{
     VulkanRHI::VulkanRHI(const VulkanConfig& config)
         :mConfig(config) {
-        Init();
     }
     VulkanRHI::~VulkanRHI(){
-        Cleanup();
     }
     void VulkanRHI::Draw(){
         vkWaitForFences(mDevice,1,&mInFlightFences[mCurrentFrame],VK_TRUE,UINT64_MAX);
@@ -546,7 +544,7 @@ namespace ProjectJ{
         mUniformBuffers.resize(mSwapChain->GetImageCount());
         
         for(size_t i = 0; i < mSwapChain->GetImageCount(); i++){
-            mUniformBuffers[i] = std::make_unique<VulkanUniformBuffer<UniformBufferObject> >(mDevice,mPhysicalDevice);
+            mUniformBuffers[i] = std::make_unique<VulkanUniformBuffer<UniformBufferObject> >();
         }
     }
     void VulkanRHI::PCreateDescriptorPool(){
