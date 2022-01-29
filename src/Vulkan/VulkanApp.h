@@ -72,8 +72,11 @@ namespace ProjectJ{
         VkDescriptorPool mDescriptorPool;
         std::vector<VkDescriptorSet> mDescriptorSets;
 
-        std::vector<VkBuffer> mUniformBuffers;
-        std::vector<VkDeviceMemory> mUniformBufferMemorys;
+        // std::vector<VkBuffer> mUniformBuffers;
+        std::vector<std::unique_ptr<VulkanUniformBuffer<UniformBufferObject> > > mUniformBuffers;
+        
+        // std::vector<VkDeviceMemory> mUniformBufferMemorys;
+        std::vector<VkDeviceMemory> mPSUniformBufferMemorys;
 
         std::vector<VkSemaphore> mImageAvailableSemaphores;
         std::vector<VkSemaphore> mRenderFinishedSemaphores;

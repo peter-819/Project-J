@@ -45,23 +45,19 @@ namespace ProjectJ{
             vkWaitForFences(mDevice,1,&mImagesInFlight[imageIndex],VK_TRUE,UINT64_MAX);
         }
         mImagesInFlight[imageIndex] = mImagesInFlight[mCurrentFrame];
-        
-        auto updateUniformBuffer = [this](uint32_t currentImage){
+
+        auto updateUniformBuffer = [this](UniformBufferObject& ubo) {
             static auto startTime = std::chrono::high_resolution_clock::now();
             auto currentTime = std::chrono::high_resolution_clock::now();
             float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
-        
-            UniformBufferObject ubo{};
             ubo.model = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
             ubo.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
             ubo.proj = glm::perspective(glm::radians(45.0f), mSwapChain->GetExtent().width / (float) mSwapChain->GetExtent().height, 0.1f, 10.0f);
             ubo.proj[1][1] *= -1;
-            void* data;
-            vkMapMemory(mDevice, mUniformBufferMemorys[currentImage], 0, sizeof(ubo), 0, &data);
-            memcpy(data, &ubo, sizeof(ubo));
-            vkUnmapMemory(mDevice, mUniformBufferMemorys[currentImage]);
         };
-        updateUniformBuffer(imageIndex);
+        // updateUniformBuffer(imageIndex);
+        mUniformBuffers[imageIndex]->ModifyAndSync(updateUniformBuffer);
+
         VkSubmitInfo submitInfo{};
         submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 
@@ -114,8 +110,7 @@ namespace ProjectJ{
         vkFreeMemory(mDevice,mVertexBufferMemory,nullptr);
         
         for(size_t i = 0; i < mSwapChain->GetImageCount(); i++){
-            vkDestroyBuffer(mDevice,mUniformBuffers[i],nullptr);
-            vkFreeMemory(mDevice,mUniformBufferMemorys[i],nullptr);
+            mUniformBuffers[i].reset();
         }
         vkDestroyDescriptorPool(mDevice,mDescriptorPool,nullptr);
         vkDestroyDescriptorSetLayout(mDevice,mDescriptorSetLayout,nullptr);
@@ -426,7 +421,7 @@ namespace ProjectJ{
         uboLayoutBinding.descriptorCount = 1;
         uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
         uboLayoutBinding.pImmutableSamplers = nullptr;
-        
+
         VkDescriptorSetLayoutCreateInfo layoutInfo{};
         layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
         layoutInfo.bindingCount = 1;
@@ -549,24 +544,16 @@ namespace ProjectJ{
     void VulkanRHI::PCreateUniformBuffer(){
         VkDeviceSize bufferSize = sizeof(UniformBufferObject);
         mUniformBuffers.resize(mSwapChain->GetImageCount());
-        mUniformBufferMemorys.resize(mSwapChain->GetImageCount());
         
         for(size_t i = 0; i < mSwapChain->GetImageCount(); i++){
-            HCreateBuffer(
-                bufferSize, 
-                VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-                VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-                VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                mUniformBuffers[i],
-                mUniformBufferMemorys[i]
-            );
+            mUniformBuffers[i] = std::make_unique<VulkanUniformBuffer<UniformBufferObject> >(mDevice,mPhysicalDevice);
         }
     }
     void VulkanRHI::PCreateDescriptorPool(){
         VkDescriptorPoolSize poolSize{};
         poolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
         poolSize.descriptorCount = static_cast<uint32_t>(mSwapChain->GetImageCount());
-        
+
         VkDescriptorPoolCreateInfo poolInfo{};
         poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
         poolInfo.poolSizeCount = 1;
@@ -585,10 +572,7 @@ namespace ProjectJ{
         mDescriptorSets.resize(mSwapChain->GetImageCount());
         VK_CHECK(vkAllocateDescriptorSets(mDevice,&allocInfo,mDescriptorSets.data()),"failed to allocate descriptor sets");
         for(size_t i = 0; i < mSwapChain->GetImageCount(); i++){
-            VkDescriptorBufferInfo bufferInfo{};
-            bufferInfo.buffer = mUniformBuffers[i];
-            bufferInfo.offset = 0;
-            bufferInfo.range = sizeof(UniformBufferObject);
+            VkDescriptorBufferInfo bufferInfo = mUniformBuffers[i]->GetBufferInfo();
 
             VkWriteDescriptorSet descriptorWrite{};
             descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;

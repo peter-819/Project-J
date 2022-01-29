@@ -30,5 +30,8 @@ namespace ProjectJ{
         glm::mat4 model;
         glm::mat4 view;
         glm::mat4 proj;
+    };    
+    struct PSUniformBufferObject{
+        glm::vec3 color;
     };
 }
