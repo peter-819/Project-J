@@ -101,12 +101,9 @@ namespace ProjectJ{
     void VulkanRHI::Cleanup(){
         vkDeviceWaitIdle(mDevice);
 
-        vkDestroyBuffer(mDevice,mIndexBuffer,nullptr);
-        vkFreeMemory(mDevice,mIndexBufferMemory,nullptr);
+        mIndexBuffer.reset();
+        mVertexBuffer.reset();
 
-        vkDestroyBuffer(mDevice,mVertexBuffer,nullptr);
-        vkFreeMemory(mDevice,mVertexBufferMemory,nullptr);
-        
         for(size_t i = 0; i < mSwapChain->GetImageCount(); i++){
             mUniformBuffers[i].reset();
         }
@@ -482,62 +479,10 @@ namespace ProjectJ{
         VK_CHECK(vkCreateCommandPool(mDevice,&poolInfo,nullptr,&mCommandPool),"failed to create command pool.");
     }
     void VulkanRHI::PCreateVertexBuffer(){
-        VkDeviceSize bufferSize = sizeof(vertices[0]) * vertices.size();
-        VkBuffer stagingBuffer;
-        VkDeviceMemory stagingBufferMemory;
-        
-        HCreateBuffer(
-            bufferSize,
-            VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-            stagingBuffer,
-            stagingBufferMemory
-        );
-
-        void* data;
-        vkMapMemory(mDevice,stagingBufferMemory,0,bufferSize,0,&data);
-        memcpy(data,vertices.data(),(size_t)(bufferSize));
-        vkUnmapMemory(mDevice,stagingBufferMemory);
-
-        HCreateBuffer(
-            bufferSize,
-            VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-            mVertexBuffer,
-            mVertexBufferMemory
-        );  
-        HCopyBuffer(stagingBuffer,mVertexBuffer,bufferSize);
-        vkDestroyBuffer(mDevice,stagingBuffer,nullptr);
-        vkFreeMemory(mDevice,stagingBufferMemory,nullptr);
+        mVertexBuffer = std::make_unique<VulkanVertexBuffer>((void*)vertices.data(), sizeof(vertices[0]) * vertices.size());
     }
     void VulkanRHI::PCreateIndexBuffer(){
-        VkDeviceSize bufferSize = sizeof(indices[0]) * indices.size();
-        VkBuffer stagingBuffer;
-        VkDeviceMemory stagingBufferMemory;
-        
-        HCreateBuffer(
-            bufferSize,
-            VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-            stagingBuffer,
-            stagingBufferMemory
-        );
-
-        void* data;
-        vkMapMemory(mDevice,stagingBufferMemory,0,bufferSize,0,&data);
-        memcpy(data,indices.data(),(size_t)(bufferSize));
-        vkUnmapMemory(mDevice,stagingBufferMemory);
-
-        HCreateBuffer(
-            bufferSize,
-            VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
-            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-            mIndexBuffer,
-            mIndexBufferMemory
-        );  
-        HCopyBuffer(stagingBuffer,mIndexBuffer,bufferSize);
-        vkDestroyBuffer(mDevice,stagingBuffer,nullptr);
-        vkFreeMemory(mDevice,stagingBufferMemory,nullptr);
+        mIndexBuffer = std::make_unique<VulkanIndexBuffer>((void*)indices.data(), sizeof(indices[0]) * indices.size());
     }
     void VulkanRHI::PCreateUniformBuffer(){
         VkDeviceSize bufferSize = sizeof(UniformBufferObject);
@@ -614,10 +559,10 @@ namespace ProjectJ{
             //vkCmdBindPipeline(mCommandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, mGraphicsPipeline);
             mGraphicPipeline->Bind(mCommandBuffers[i]);
 
-            VkBuffer vertexBuffers[] = {mVertexBuffer};
+            VkBuffer vertexBuffers[] = {mVertexBuffer->mBuffer};
             VkDeviceSize offsets[] = {0};
             vkCmdBindVertexBuffers(mCommandBuffers[i],0,1,vertexBuffers,offsets);
-            vkCmdBindIndexBuffer(mCommandBuffers[i],mIndexBuffer,0,VK_INDEX_TYPE_UINT16);
+            vkCmdBindIndexBuffer(mCommandBuffers[i],mIndexBuffer->mBuffer,0,VK_INDEX_TYPE_UINT16);
 
             vkCmdBindDescriptorSets(mCommandBuffers[i],VK_PIPELINE_BIND_POINT_GRAPHICS,mPipelineLayout,0,1,&mDescriptorSets[i],0,nullptr);
             vkCmdDrawIndexed(mCommandBuffers[i],static_cast<uint32_t>(indices.size()),1,0,0,0);
@@ -644,67 +589,5 @@ namespace ProjectJ{
             VK_CHECK(vkCreateSemaphore(mDevice,&semaphoreInfo,nullptr,&mRenderFinishedSemaphores[i]),"failed to create semaphores.");    
             VK_CHECK(vkCreateFence(mDevice,&fenceInfo,nullptr,&mInFlightFences[i]),"failed to create fence.");
         }
-    }
-    void VulkanRHI::HCreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage,VkMemoryPropertyFlags properties,VkBuffer& buffer,VkDeviceMemory& bufferMemory){
-        VkBufferCreateInfo bufferInfo{};
-        bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-        bufferInfo.size = size;
-        bufferInfo.usage = usage;
-        bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-        VK_CHECK(vkCreateBuffer(mDevice,&bufferInfo,nullptr,&buffer),"failed to create vertex buffer.");
-
-        VkMemoryRequirements memRequirements;
-        vkGetBufferMemoryRequirements(mDevice,buffer,&memRequirements);
-        auto findMemoryType = [this](uint32_t typeFilter, VkMemoryPropertyFlags properties){
-            VkPhysicalDeviceMemoryProperties memProperties;
-            vkGetPhysicalDeviceMemoryProperties(mPhysicalDevice,&memProperties);
-            for(uint32_t i = 0; i < memProperties.memoryTypeCount; i++){
-                if(typeFilter & (1 << i) && (memProperties.memoryTypes[i].propertyFlags & properties) == properties){
-                    return i;
-                }
-            }
-            throw std::runtime_error("failed to find suitable memory type.");
-        };
-
-        VkMemoryAllocateInfo allocInfo{};
-        allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-        allocInfo.allocationSize = memRequirements.size;
-        allocInfo.memoryTypeIndex = findMemoryType(
-            memRequirements.memoryTypeBits,
-            properties
-        );
-        VK_CHECK(vkAllocateMemory(mDevice,&allocInfo,nullptr,&bufferMemory),"failed to allocate vertex buffer memory.");
-        vkBindBufferMemory(mDevice,buffer,bufferMemory,0);
-    }
-    void VulkanRHI::HCopyBuffer(VkBuffer srcBuffer,VkBuffer dstBuffer,VkDeviceSize size){
-        VkCommandBufferAllocateInfo allocInfo{};
-        allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-        allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-        allocInfo.commandPool = mCommandPool;
-        allocInfo.commandBufferCount = 1;
-        VkCommandBuffer commandBuffer;
-        vkAllocateCommandBuffers(mDevice,&allocInfo,&commandBuffer);
-        
-        VkCommandBufferBeginInfo beginInfo{};
-        beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-        beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-
-        vkBeginCommandBuffer(commandBuffer,&beginInfo);
-
-        VkBufferCopy copyRegion{};
-        copyRegion.srcOffset = 0;
-        copyRegion.dstOffset = 0;
-        copyRegion.size = size;
-        vkCmdCopyBuffer(commandBuffer,srcBuffer,dstBuffer,1,&copyRegion);
-        vkEndCommandBuffer(commandBuffer);
-        
-        VkSubmitInfo submitInfo{};
-        submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-        submitInfo.commandBufferCount = 1;
-        submitInfo.pCommandBuffers = &commandBuffer;
-
-        vkQueueSubmit(mGraphicQueue,1,&submitInfo,VK_NULL_HANDLE);
-        vkQueueWaitIdle(mGraphicQueue);
-        vkFreeCommandBuffers(mDevice,mCommandPool,1,&commandBuffer);
     }
 }

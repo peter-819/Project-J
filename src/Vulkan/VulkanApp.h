@@ -13,6 +13,7 @@ namespace ProjectJ{
     };
     class VulkanRHI{
         friend class VulkanBufferBase;
+        friend class VulkanStagingBuffer;
     public:
         VulkanRHI(const VulkanConfig& config);
         ~VulkanRHI();
@@ -43,14 +44,6 @@ namespace ProjectJ{
 
         std::vector<const char*> HGetRequiredExtensions();
         VkDebugUtilsMessengerCreateInfoEXT HPopulateDebugMessengerCreateInfo() const;
-        void HCreateBuffer(
-            VkDeviceSize size,
-            VkBufferUsageFlags usage,
-            VkMemoryPropertyFlags properties,
-            VkBuffer& buffer,
-            VkDeviceMemory& bufferMemory
-        );
-        void HCopyBuffer(VkBuffer srcBuffer,VkBuffer dstBuffer,VkDeviceSize size);
     private:
         VulkanConfig mConfig;
         VkInstance mInstance;
@@ -67,10 +60,8 @@ namespace ProjectJ{
         VkRenderPass mRenderPass;
         // VkPipeline mGraphicsPipeline;
         VkCommandPool mCommandPool;
-        VkBuffer mVertexBuffer;
-        VkDeviceMemory mVertexBufferMemory;
-        VkBuffer mIndexBuffer;
-        VkDeviceMemory mIndexBufferMemory;
+        std::unique_ptr<VulkanVertexBuffer> mVertexBuffer;
+        std::unique_ptr<VulkanIndexBuffer> mIndexBuffer;
         VkDescriptorPool mDescriptorPool;
         std::vector<VkDescriptorSet> mDescriptorSets;
 

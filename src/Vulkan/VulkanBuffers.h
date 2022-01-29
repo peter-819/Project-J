@@ -6,15 +6,18 @@ namespace ProjectJ{
     class VulkanBufferBase{
     public:
         VulkanBufferBase() = delete;
-        VulkanBufferBase(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties);
+        VulkanBufferBase(size_t size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties);
         ~VulkanBufferBase();
     protected:
-        VkBuffer mBuffer;
         VkDeviceMemory mMemory;
         VkDevice mDevice;
         VkPhysicalDevice mPhysicalDevice;
+        VkDeviceSize mSize;
+    //TODO: remove public 
+    public:
+        VkBuffer mBuffer;
     };
-    template<class TUniformBufferClass, uint32_t Size = sizeof TUniformBufferClass>
+    template<class TUniformBufferClass, size_t Size = sizeof TUniformBufferClass>
     class VulkanUniformBuffer : public VulkanBufferBase{
     public:
         VulkanUniformBuffer()
@@ -45,13 +48,25 @@ namespace ProjectJ{
         TUniformBufferClass mCpuBuffer;
     };
 
-    // class VulkanStagingBuffer : public VulkanBufferBase{
-        
-    // }
+    class VulkanStagingBuffer : public VulkanBufferBase{
+    public:
+        VulkanStagingBuffer::VulkanStagingBuffer(void* data, size_t size);
+        void CopyToDst(const VulkanBufferBase* dstBuffer);
+
+    private:
+        VkCommandPool mCommandPool;
+        VkQueue mGraphicQueue;
+    };
+
     class VulkanVertexBuffer : public VulkanBufferBase{
     public:
-        VulkanVertexBuffer(VkDevice device, VkPhysicalDevice physicalDevice, void* data, uint32_t size);
-        VulkanVertexBuffer(VkDevice device, VkPhysicalDevice physicalDevice, uint32_t size);
-        
+        VulkanVertexBuffer(void* data, size_t size);
+        VulkanVertexBuffer(size_t size);
+    };
+
+    class VulkanIndexBuffer : public VulkanBufferBase{
+    public:
+        VulkanIndexBuffer(void* data, size_t size);
+        VulkanIndexBuffer(size_t size);
     };
 }
