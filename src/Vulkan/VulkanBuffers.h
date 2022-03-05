@@ -17,6 +17,8 @@ namespace ProjectJ{
     public:
         VkBuffer mBuffer;
     };
+    using VulkanBufferPtr = std::shared_ptr<VulkanBufferBase>;
+
     template<class TUniformBufferClass, size_t Size = sizeof TUniformBufferClass>
     class VulkanUniformBuffer : public VulkanBufferBase{
     public:

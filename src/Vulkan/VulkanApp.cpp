@@ -1,5 +1,6 @@
 #include "Jpch.h"
 #include "VulkanApp.h"
+#include "stb_image.h"
 
 static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
     VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
@@ -35,14 +36,7 @@ namespace ProjectJ{
     VulkanRHI::~VulkanRHI(){
     }
     void VulkanRHI::Draw(){
-        vkWaitForFences(mDevice,1,&mInFlightFences[mCurrentFrame],VK_TRUE,UINT64_MAX);
-        uint32_t imageIndex;
-        //vkAcquireNextImageKHR(mDevice,mSwapChain,UINT64_MAX,mImageAvailableSemaphores[mCurrentFrame],VK_NULL_HANDLE,&imageIndex);
-        imageIndex = mSwapChain->AcquireNextImage(mImageAvailableSemaphores[mCurrentFrame]);
-        if(mImagesInFlight[imageIndex] != VK_NULL_HANDLE){
-            vkWaitForFences(mDevice,1,&mImagesInFlight[imageIndex],VK_TRUE,UINT64_MAX);
-        }
-        mImagesInFlight[imageIndex] = mImagesInFlight[mCurrentFrame];
+        ScopedFrame frame(mQueue);
 
         auto updateUniformBuffer = [this](UniformBufferObject& ubo) {
             static auto startTime = std::chrono::high_resolution_clock::now();
@@ -53,28 +47,7 @@ namespace ProjectJ{
             ubo.proj = glm::perspective(glm::radians(45.0f), mSwapChain->GetExtent().width / (float) mSwapChain->GetExtent().height, 0.1f, 10.0f);
             ubo.proj[1][1] *= -1;
         };
-        // updateUniformBuffer(imageIndex);
-        mUniformBuffers[imageIndex]->ModifyAndSync(updateUniformBuffer);
-
-        VkSubmitInfo submitInfo{};
-        submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-
-        VkSemaphore waitSemaphores[] = {mImageAvailableSemaphores[mCurrentFrame]};
-        VkPipelineStageFlags waitStages[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
-        submitInfo.waitSemaphoreCount = 1;
-        submitInfo.pWaitSemaphores = waitSemaphores;
-        submitInfo.pWaitDstStageMask = waitStages;
-        submitInfo.commandBufferCount = 1;
-        submitInfo.pCommandBuffers = &mCommandBuffers[imageIndex];
-        VkSemaphore signalSemaphores[] = {mRenderFinishedSemaphores[mCurrentFrame]};
-        submitInfo.signalSemaphoreCount = 1;
-        submitInfo.pSignalSemaphores = signalSemaphores;
-        
-        vkResetFences(mDevice,1,&mInFlightFences[mCurrentFrame]);
-        VK_CHECK(vkQueueSubmit(mGraphicQueue,1,&submitInfo,mInFlightFences[mCurrentFrame]),"failed to submit draw command buffer.");
-
-        mSwapChain->Present(mPresentQueue,mRenderFinishedSemaphores[mCurrentFrame]);
-        mCurrentFrame = (mCurrentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
+        mUniformBuffers[frame.ImageIndex]->ModifyAndSync(updateUniformBuffer);
     }
     void VulkanRHI::Init(){
         PCreateInstance();
@@ -89,14 +62,13 @@ namespace ProjectJ{
         PCreateDescriptorSetLayout();
         PCreateGraphicsPipeline();
         PCreateFramebuffers();
-        PCreateCommandPool();
+        mQueue = std::make_shared<VulkanQueue>();
         PCreateVertexBuffer();
         PCreateIndexBuffer();
         PCreateUniformBuffer();
         PCreateDescriptorPool();
         PCreateDescriptorSet();
-        PCreateCommandBuffers();
-        PCreateSyncObjects();
+        PPrepareCommandBuffers();
     }
     void VulkanRHI::Cleanup(){
         vkDeviceWaitIdle(mDevice);
@@ -110,12 +82,7 @@ namespace ProjectJ{
         vkDestroyDescriptorPool(mDevice,mDescriptorPool,nullptr);
         vkDestroyDescriptorSetLayout(mDevice,mDescriptorSetLayout,nullptr);
         
-        for(size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++){
-            vkDestroySemaphore(mDevice,mRenderFinishedSemaphores[i],nullptr);
-            vkDestroySemaphore(mDevice,mImageAvailableSemaphores[i],nullptr);
-            vkDestroyFence(mDevice,mInFlightFences[i],nullptr);
-        }
-        vkDestroyCommandPool(mDevice,mCommandPool,nullptr);
+        mQueue.reset();
         for(auto framebuffer : mSwapChainFramebuffers){
             vkDestroyFramebuffer(mDevice,framebuffer,nullptr);
         }
@@ -367,8 +334,6 @@ namespace ProjectJ{
             createInfo.enabledLayerCount = 0;
         }
         VK_CHECK(vkCreateDevice(mPhysicalDevice,&createInfo,nullptr,&mDevice),"failed to create logical device.");
-        vkGetDeviceQueue(mDevice,mQueueFamilyIndices.graphicsFamily.value(),0,&mGraphicQueue);
-        vkGetDeviceQueue(mDevice,mQueueFamilyIndices.presentFamily.value(),0,&mPresentQueue);
     }
     void VulkanRHI::PCreateRenderPass(){
         VkAttachmentDescription colorAttachment{};
@@ -471,13 +436,6 @@ namespace ProjectJ{
             
         }
     }
-    void VulkanRHI::PCreateCommandPool(){
-        VkCommandPoolCreateInfo poolInfo{};
-        poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-        poolInfo.queueFamilyIndex = mQueueFamilyIndices.graphicsFamily.value();
-        poolInfo.flags = 0;
-        VK_CHECK(vkCreateCommandPool(mDevice,&poolInfo,nullptr,&mCommandPool),"failed to create command pool.");
-    }
     void VulkanRHI::PCreateVertexBuffer(){
         mVertexBuffer = std::make_unique<VulkanVertexBuffer>((void*)vertices.data(), sizeof(vertices[0]) * vertices.size());
     }
@@ -530,64 +488,39 @@ namespace ProjectJ{
             vkUpdateDescriptorSets(mDevice, 1, &descriptorWrite, 0, nullptr);
         }
     }
-    void VulkanRHI::PCreateCommandBuffers(){
-        mCommandBuffers.resize(mSwapChainFramebuffers.size());
-        VkCommandBufferAllocateInfo allocInfo{};
-        allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-        allocInfo.commandPool = mCommandPool;
-        allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-        allocInfo.commandBufferCount = (uint32_t)mCommandBuffers.size();
-        VK_CHECK(vkAllocateCommandBuffers(mDevice,&allocInfo,mCommandBuffers.data()),"failed to allocate command buffers.");
-        for(size_t i = 0; i < mCommandBuffers.size(); i++){
+    void VulkanRHI::PPrepareCommandBuffers(){
+        auto prepareFunc = [this](uint32_t index, VkCommandBuffer& commandBuffer){
             VkCommandBufferBeginInfo beginInfo{};
             beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
             beginInfo.flags = 0;
             beginInfo.pInheritanceInfo = nullptr;
-            VK_CHECK(vkBeginCommandBuffer(mCommandBuffers[i],&beginInfo),"failed to begin recoreding command buffer.");
+            VK_CHECK(vkBeginCommandBuffer(commandBuffer,&beginInfo),"failed to begin recoreding command buffer.");
 
             VkRenderPassBeginInfo renderPassInfo{};
             renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
             renderPassInfo.renderPass = mRenderPass;
-            renderPassInfo.framebuffer = mSwapChainFramebuffers[i];
+            renderPassInfo.framebuffer = mSwapChainFramebuffers[index];
             renderPassInfo.renderArea.offset = {0,0};
             renderPassInfo.renderArea.extent = mSwapChain->GetExtent();
             VkClearValue clearColor = {{{0.0f, 0.0f, 0.0f, 1.0f}}};
             renderPassInfo.clearValueCount = 1;
             renderPassInfo.pClearValues = &clearColor;
-            vkCmdBeginRenderPass(mCommandBuffers[i], &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+            vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
        
-            //vkCmdBindPipeline(mCommandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, mGraphicsPipeline);
-            mGraphicPipeline->Bind(mCommandBuffers[i]);
+            //vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, mGraphicsPipeline);
+            mGraphicPipeline->Bind(commandBuffer);
 
             VkBuffer vertexBuffers[] = {mVertexBuffer->mBuffer};
             VkDeviceSize offsets[] = {0};
-            vkCmdBindVertexBuffers(mCommandBuffers[i],0,1,vertexBuffers,offsets);
-            vkCmdBindIndexBuffer(mCommandBuffers[i],mIndexBuffer->mBuffer,0,VK_INDEX_TYPE_UINT16);
+            vkCmdBindVertexBuffers(commandBuffer,0,1,vertexBuffers,offsets);
+            vkCmdBindIndexBuffer(commandBuffer,mIndexBuffer->mBuffer,0,VK_INDEX_TYPE_UINT16);
 
-            vkCmdBindDescriptorSets(mCommandBuffers[i],VK_PIPELINE_BIND_POINT_GRAPHICS,mPipelineLayout,0,1,&mDescriptorSets[i],0,nullptr);
-            vkCmdDrawIndexed(mCommandBuffers[i],static_cast<uint32_t>(indices.size()),1,0,0,0);
-            vkCmdEndRenderPass(mCommandBuffers[i]);
+            vkCmdBindDescriptorSets(commandBuffer,VK_PIPELINE_BIND_POINT_GRAPHICS,mPipelineLayout,0,1,&mDescriptorSets[index],0,nullptr);
+            vkCmdDrawIndexed(commandBuffer,static_cast<uint32_t>(indices.size()),1,0,0,0);
+            vkCmdEndRenderPass(commandBuffer);
 
-            VK_CHECK(vkEndCommandBuffer(mCommandBuffers[i]),"failed to record command buffer.");
-        }
-    }
-    void VulkanRHI::PCreateSyncObjects(){
-        mImageAvailableSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
-        mRenderFinishedSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
-        mInFlightFences.resize(MAX_FRAMES_IN_FLIGHT);
-        mImagesInFlight.resize(mSwapChain->GetImageCount(),VK_NULL_HANDLE);
-
-        VkSemaphoreCreateInfo semaphoreInfo{};
-        semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-
-        VkFenceCreateInfo fenceInfo{};
-        fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-        fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
-
-        for(size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++){
-            VK_CHECK(vkCreateSemaphore(mDevice,&semaphoreInfo,nullptr,&mImageAvailableSemaphores[i]),"failed to create semaphores.");
-            VK_CHECK(vkCreateSemaphore(mDevice,&semaphoreInfo,nullptr,&mRenderFinishedSemaphores[i]),"failed to create semaphores.");    
-            VK_CHECK(vkCreateFence(mDevice,&fenceInfo,nullptr,&mInFlightFences[i]),"failed to create fence.");
-        }
+            VK_CHECK(vkEndCommandBuffer(commandBuffer),"failed to record command buffer.");
+        };
+        mQueue->PrepareFrameCommands(prepareFunc);
     }
 }

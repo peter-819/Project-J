@@ -51,38 +51,21 @@ namespace ProjectJ{
             vkUnmapMemory(mDevice,mMemory);
     }
     void VulkanStagingBuffer::CopyToDst(const VulkanBufferBase* dstBuffer){
-        mCommandPool = RHI::Get().mCommandPool;
-        mGraphicQueue = RHI::Get().mGraphicQueue;
+        auto queue = RHI::Get().mQueue;
+        queue->ExecuteDirectly([this, dstBuffer](VkCommandBuffer& commandBuffer){
+            VkCommandBufferBeginInfo beginInfo{};
+            beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+            beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
-        VkCommandBufferAllocateInfo allocInfo{};
-        allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-        allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-        allocInfo.commandPool = mCommandPool;
-        allocInfo.commandBufferCount = 1;
-        VkCommandBuffer commandBuffer;
-        vkAllocateCommandBuffers(mDevice,&allocInfo,&commandBuffer);
-        
-        VkCommandBufferBeginInfo beginInfo{};
-        beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-        beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+            vkBeginCommandBuffer(commandBuffer,&beginInfo);
 
-        vkBeginCommandBuffer(commandBuffer,&beginInfo);
-
-        VkBufferCopy copyRegion{};
-        copyRegion.srcOffset = 0;
-        copyRegion.dstOffset = 0;
-        copyRegion.size = mSize;
-        vkCmdCopyBuffer(commandBuffer,mBuffer,dstBuffer->mBuffer,1,&copyRegion);
-        vkEndCommandBuffer(commandBuffer);
-        
-        VkSubmitInfo submitInfo{};
-        submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-        submitInfo.commandBufferCount = 1;
-        submitInfo.pCommandBuffers = &commandBuffer;
-
-        vkQueueSubmit(mGraphicQueue,1,&submitInfo,VK_NULL_HANDLE);
-        vkQueueWaitIdle(mGraphicQueue);
-        vkFreeCommandBuffers(mDevice,mCommandPool,1,&commandBuffer);
+            VkBufferCopy copyRegion{};
+            copyRegion.srcOffset = 0;
+            copyRegion.dstOffset = 0;
+            copyRegion.size = mSize;
+            vkCmdCopyBuffer(commandBuffer,mBuffer,dstBuffer->mBuffer,1,&copyRegion);
+            vkEndCommandBuffer(commandBuffer);
+        });        
     }
 
     VulkanVertexBuffer::VulkanVertexBuffer(void* data, size_t size)

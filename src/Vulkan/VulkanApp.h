@@ -3,6 +3,8 @@
 #include "VulkanSwapChain.h"
 #include "VulkanBuffers.h"
 #include "VulkanPSO.h"
+#include "VulkanTexture.h"
+#include "VulkanCommand.h"
 #include <optional>
 
 namespace ProjectJ{
@@ -14,6 +16,8 @@ namespace ProjectJ{
     class VulkanRHI{
         friend class VulkanBufferBase;
         friend class VulkanStagingBuffer;
+        friend class VulkanTexture;
+        friend class VulkanQueue;
     public:
         VulkanRHI(const VulkanConfig& config);
         ~VulkanRHI();
@@ -21,7 +25,7 @@ namespace ProjectJ{
     public:
         void Init();
         void Cleanup();
-
+        
     private:
         void PCreateInstance();
         bool PCheckValidationLayer();
@@ -39,8 +43,7 @@ namespace ProjectJ{
         void PCreateUniformBuffer();
         void PCreateDescriptorPool();
         void PCreateDescriptorSet();
-        void PCreateCommandBuffers();
-        void PCreateSyncObjects();
+        void PPrepareCommandBuffers();
 
         std::vector<const char*> HGetRequiredExtensions();
         VkDebugUtilsMessengerCreateInfoEXT HPopulateDebugMessengerCreateInfo() const;
@@ -50,41 +53,36 @@ namespace ProjectJ{
         VkDebugUtilsMessengerEXT mDebugMessenger;
         VkPhysicalDevice mPhysicalDevice;
         VkDevice mDevice;
-        VkQueue mGraphicQueue;
-        VkQueue mPresentQueue;
+        // VkQueue mGraphicQueue;
+        // VkQueue mPresentQueue;
         VkSurfaceKHR mSurface;
         
         std::vector<VkFramebuffer> mSwapChainFramebuffers;
         VkDescriptorSetLayout mDescriptorSetLayout;
         VkPipelineLayout mPipelineLayout;
         VkRenderPass mRenderPass;
-        // VkPipeline mGraphicsPipeline;
-        VkCommandPool mCommandPool;
+        // VkCommandPool mCommandPool;
         std::unique_ptr<VulkanVertexBuffer> mVertexBuffer;
         std::unique_ptr<VulkanIndexBuffer> mIndexBuffer;
         VkDescriptorPool mDescriptorPool;
         std::vector<VkDescriptorSet> mDescriptorSets;
 
-        // std::vector<VkBuffer> mUniformBuffers;
         std::vector<std::unique_ptr<VulkanUniformBuffer<UniformBufferObject> > > mUniformBuffers;
         
-        // std::vector<VkDeviceMemory> mUniformBufferMemorys;
-        std::vector<VkDeviceMemory> mPSUniformBufferMemorys;
+        // std::vector<VkSemaphore> mImageAvailableSemaphores;
+        // std::vector<VkSemaphore> mRenderFinishedSemaphores;
+        // std::vector<VkFence> mInFlightFences;
+        // std::vector<VkFence> mImagesInFlight;
+        // size_t mCurrentFrame = 0;
 
-        std::vector<VkSemaphore> mImageAvailableSemaphores;
-        std::vector<VkSemaphore> mRenderFinishedSemaphores;
-        std::vector<VkFence> mInFlightFences;
-        std::vector<VkFence> mImagesInFlight;
-        size_t mCurrentFrame = 0;
-
-        std::vector<VkCommandBuffer> mCommandBuffers;
+        // std::vector<VkCommandBuffer> mCommandBuffers;
         const std::vector<const char*> mValidationLayers = {
             "VK_LAYER_KHRONOS_validation"
         };
         const std::vector<const char*> mDeviceExtensions = {
             VK_KHR_SWAPCHAIN_EXTENSION_NAME
         };
-        const int MAX_FRAMES_IN_FLIGHT = 2;
+        // const int MAX_FRAMES_IN_FLIGHT = 2;
         QueueFamilyIndices mQueueFamilyIndices;
         SwapChainSupportDetails mSwapChainSupportDetails;
 
@@ -100,6 +98,7 @@ namespace ProjectJ{
     private:
         std::shared_ptr<VulkanSwapChain> mSwapChain;
         std::shared_ptr<VulkanPSO> mGraphicPipeline;
+        std::shared_ptr<VulkanQueue> mQueue;
     };
 
 }

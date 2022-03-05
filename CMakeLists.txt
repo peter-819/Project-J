@@ -31,6 +31,7 @@ target_link_libraries(${PROJECT_NAME}
 target_include_directories(${PROJECT_NAME} 
     PUBLIC ${VULKAN_INCLUDE_DIR}
     PUBLIC ${THIRDPARTY_DIR}/glm
+    PUBLIC ${THIRDPARTY_DIR}/stb
 )
 
 
