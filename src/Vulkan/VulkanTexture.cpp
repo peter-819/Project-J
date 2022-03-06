@@ -119,26 +119,6 @@ namespace ProjectJ{
         });
     }
 
-    std::shared_ptr<VulkanTexture> TextureLoader::CreateFromPath(const std::string& path){
-        int texWidth, texHeight, texChannels;
-        stbi_uc* pixels = stbi_load("textures/texture.jpg", &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
-        VkDeviceSize imageSize = texWidth * texHeight * 4;
-
-        if (!pixels) {
-            throw std::runtime_error("failed to load texture image!");
-        }
-        auto stagingBuffer = std::make_shared<VulkanStagingBuffer>(pixels,imageSize);
-        
-        auto texture = std::make_shared<VulkanTexture>(texWidth,texHeight, VK_FORMAT_R8G8B8A8_SRGB);// TODO
-        
-        texture->LayoutTransition(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-        stagingBuffer->CopyToTexture(texture.get());
-        texture->LayoutTransition(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-        
-        stbi_image_free(pixels);
-        return texture;
-    }
-
 
     VulkanSampler::VulkanSampler(const VulkanSamplerDesc& desc){
         VkSamplerCreateInfo samplerInfo{};
@@ -169,11 +149,57 @@ namespace ProjectJ{
         vkDestroySampler(RHI::Get().mDevice, mSampler, nullptr);
     }
 
-    VkDescriptorImageInfo VulkanSampler::GetImageInfo(VulkanTexture* texture) const {
+
+    VulkanTextureSampler::VulkanTextureSampler(uint32_t width,uint32_t height, VkFormat format, const VulkanSamplerDesc& desc)
+        :VulkanTexture(width,height,format),VulkanSampler(desc) {
+
+    }    
+    VkDescriptorImageInfo VulkanTextureSampler::GetImageInfo() const {
         VkDescriptorImageInfo imageInfo{};
         imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        imageInfo.imageView = texture->mView;
+        imageInfo.imageView = mView;
         imageInfo.sampler = mSampler;
         return imageInfo;
+    }
+
+    
+    std::shared_ptr<VulkanTexture> TextureLoader::CreateTexFromPath(const std::string& path){
+        int texWidth, texHeight, texChannels;
+        stbi_uc* pixels = stbi_load("textures/texture.jpg", &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
+        VkDeviceSize imageSize = texWidth * texHeight * 4;
+
+        if (!pixels) {
+            throw std::runtime_error("failed to load texture image!");
+        }
+        auto stagingBuffer = std::make_shared<VulkanStagingBuffer>(pixels,imageSize);
+        
+        auto texture = std::make_shared<VulkanTexture>(texWidth,texHeight, VK_FORMAT_R8G8B8A8_SRGB);// TODO
+        
+        texture->LayoutTransition(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+        stagingBuffer->CopyToTexture(texture.get());
+        texture->LayoutTransition(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+        
+        stbi_image_free(pixels);
+        return texture;
+    }
+
+    std::shared_ptr<VulkanTextureSampler> TextureLoader::CreateTexSamplerFromPath(const std::string& path, const VulkanSamplerDesc& desc){
+        int texWidth, texHeight, texChannels;
+        stbi_uc* pixels = stbi_load("textures/texture.jpg", &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
+        VkDeviceSize imageSize = texWidth * texHeight * 4;
+
+        if (!pixels) {
+            throw std::runtime_error("failed to load texture image!");
+        }
+        auto stagingBuffer = std::make_shared<VulkanStagingBuffer>(pixels,imageSize);
+        
+        auto texture = std::make_shared<VulkanTextureSampler>(texWidth,texHeight, VK_FORMAT_R8G8B8A8_SRGB, desc);// TODO
+        
+        texture->LayoutTransition(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+        stagingBuffer->CopyToTexture(texture.get());
+        texture->LayoutTransition(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+        
+        stbi_image_free(pixels);
+        return texture;
     }
 }

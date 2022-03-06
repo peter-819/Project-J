@@ -70,6 +70,15 @@ namespace ProjectJ{
         PCreateDescriptorPool();
         PCreateDescriptorSet();
         PPrepareCommandBuffers();
+
+        {
+            foo f{};
+            for_each_member(f,[](const auto& val){
+                if constexpr (std::is_same<decltype(val),const int&>::value) {
+                    std::cout<<"int"<<std::endl;
+                }
+            });
+        }
     }
     void VulkanRHI::Cleanup(){
         vkDeviceWaitIdle(mDevice);
@@ -473,12 +482,11 @@ namespace ProjectJ{
         }
     }
     void VulkanRHI::PCreateTextureSampler(){
-        mTexture = TextureLoader::CreateFromPath("textures/texture.jpg");
         VulkanSamplerDesc desc{};
         desc.magFilter = VK_FILTER_LINEAR;
         desc.minFilter = VK_FILTER_LINEAR;
         desc.u = desc.v = desc.w = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-        mSampler = std::make_shared<VulkanSampler>(desc);
+        mTextureSampler = TextureLoader::CreateTexSamplerFromPath("textures/texture.jpg", desc);
     }
     void VulkanRHI::PCreateDescriptorPool(){
         std::array<VkDescriptorPoolSize, 2> poolSize;
@@ -506,7 +514,7 @@ namespace ProjectJ{
         VK_CHECK(vkAllocateDescriptorSets(mDevice,&allocInfo,mDescriptorSets.data()),"failed to allocate descriptor sets");
         for(size_t i = 0; i < mSwapChain->GetImageCount(); i++){
             VkDescriptorBufferInfo bufferInfo = mUniformBuffers[i]->GetBufferInfo();
-            VkDescriptorImageInfo imageInfo = mSampler->GetImageInfo(mTexture.get());
+            VkDescriptorImageInfo imageInfo = mTextureSampler->GetImageInfo();
 
             std::array<VkWriteDescriptorSet, 2> descriptorWrite{};
             

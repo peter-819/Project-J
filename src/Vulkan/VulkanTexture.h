@@ -15,15 +15,10 @@ namespace ProjectJ{
         uint32_t Width;
         uint32_t Height;
         VkFormat Format;
-    private:
+    protected:
         VkImage mImage;
         VkDeviceMemory mMemory;
         VkImageView mView;
-    };
-
-    class TextureLoader{
-    public:
-        static std::shared_ptr<VulkanTexture> CreateFromPath(const std::string& path);
     };
 
     struct VulkanSamplerDesc{
@@ -35,8 +30,22 @@ namespace ProjectJ{
     public:
         VulkanSampler(const VulkanSamplerDesc& desc);
         ~VulkanSampler();
-        VkDescriptorImageInfo GetImageInfo(VulkanTexture* texture) const;
-    private:
+    protected:
         VkSampler mSampler;
+    };
+
+    class VulkanTextureSampler : public VulkanTexture, public VulkanSampler {
+    public:
+        VulkanTextureSampler(uint32_t width,uint32_t height, VkFormat format, const VulkanSamplerDesc& desc);
+
+        VkDescriptorImageInfo GetImageInfo() const;
+    };
+
+    
+    class TextureLoader{
+    public:
+        static std::shared_ptr<VulkanTexture> CreateTexFromPath(const std::string& path);
+        static std::shared_ptr<VulkanTextureSampler> CreateTexSamplerFromPath(const std::string& path, const VulkanSamplerDesc& desc);
+
     };
 }

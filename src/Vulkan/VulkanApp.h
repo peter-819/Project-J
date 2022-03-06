@@ -67,8 +67,8 @@ namespace ProjectJ{
         std::vector<VkDescriptorSet> mDescriptorSets;
 
         std::vector<std::unique_ptr<VulkanUniformBuffer<UniformBufferObject> > > mUniformBuffers;
-        std::shared_ptr<VulkanTexture> mTexture;
-        std::shared_ptr<VulkanSampler> mSampler;
+        std::shared_ptr<VulkanTextureSampler> mTextureSampler;
+        // std::shared_ptr<VulkanSampler> mSampler;
 
         const std::vector<const char*> mValidationLayers = {
             "VK_LAYER_KHRONOS_validation"
