@@ -50,31 +50,52 @@ namespace ProjectJ{
             memcpy(p,data,(size_t)(size));
             vkUnmapMemory(mDevice,mMemory);
     }
-    void VulkanStagingBuffer::CopyToDst(const VulkanBufferBase* dstBuffer){
+    void VulkanStagingBuffer::CopyToBuffer(const VulkanBufferBase* dstBuffer){
         auto queue = RHI::Get().mQueue;
         queue->ExecuteDirectly([this, dstBuffer](VkCommandBuffer& commandBuffer){
-            VkCommandBufferBeginInfo beginInfo{};
-            beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-            beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-
-            vkBeginCommandBuffer(commandBuffer,&beginInfo);
-
             VkBufferCopy copyRegion{};
             copyRegion.srcOffset = 0;
             copyRegion.dstOffset = 0;
             copyRegion.size = mSize;
             vkCmdCopyBuffer(commandBuffer,mBuffer,dstBuffer->mBuffer,1,&copyRegion);
-            vkEndCommandBuffer(commandBuffer);
         });        
     }
+    void VulkanStagingBuffer::CopyToTexture(const VulkanTexture* dstTex){
+        auto queue = RHI::Get().mQueue;
+        queue->ExecuteDirectly([this,dstTex](VkCommandBuffer& commandBuffer){
+            VkBufferImageCopy region{};
+            region.bufferOffset = 0;
+            region.bufferRowLength = 0;
+            region.bufferImageHeight = 0;
 
+            region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            region.imageSubresource.mipLevel = 0;
+            region.imageSubresource.baseArrayLayer = 0;
+            region.imageSubresource.layerCount = 1;
+
+            region.imageOffset = {0, 0, 0};
+            region.imageExtent = {
+                dstTex->Width,
+                dstTex->Height,
+                1
+            };
+            vkCmdCopyBufferToImage(
+                commandBuffer,
+                mBuffer,
+                dstTex->mImage,
+                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                1,
+                &region
+            );
+        });
+    }
     VulkanVertexBuffer::VulkanVertexBuffer(void* data, size_t size)
         : VulkanBufferBase(
             size, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
             VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
     {
         VulkanStagingBuffer stagingBuffer(data,size);
-        stagingBuffer.CopyToDst(this);
+        stagingBuffer.CopyToBuffer(this);
     }
 
     VulkanVertexBuffer::VulkanVertexBuffer(size_t size)
@@ -90,7 +111,7 @@ namespace ProjectJ{
             VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
     {
         VulkanStagingBuffer stagingBuffer(data,size);
-        stagingBuffer.CopyToDst(this);
+        stagingBuffer.CopyToBuffer(this);
     }
 
     VulkanIndexBuffer::VulkanIndexBuffer(size_t size)

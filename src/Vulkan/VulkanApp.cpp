@@ -66,6 +66,7 @@ namespace ProjectJ{
         PCreateVertexBuffer();
         PCreateIndexBuffer();
         PCreateUniformBuffer();
+        PCreateTextureSampler();
         PCreateDescriptorPool();
         PCreateDescriptorSet();
         PPrepareCommandBuffers();
@@ -264,6 +265,11 @@ namespace ProjectJ{
             if(details.formats.empty() || details.presentModes.empty()) {
                 return false;
             }
+            VkPhysicalDeviceFeatures supportedFeatures;
+            vkGetPhysicalDeviceFeatures(device, &supportedFeatures);
+            if(!supportedFeatures.samplerAnisotropy){
+                return false;
+            }
             return true;
         };
 
@@ -318,6 +324,7 @@ namespace ProjectJ{
         }
 
         VkPhysicalDeviceFeatures deviceFeatures{};
+        deviceFeatures.samplerAnisotropy = VK_TRUE;
         VkDeviceCreateInfo createInfo{};
         createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
         createInfo.pQueueCreateInfos = queueCreateInfos.data();
@@ -382,10 +389,20 @@ namespace ProjectJ{
         uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
         uboLayoutBinding.pImmutableSamplers = nullptr;
 
+        //sampler
+        VkDescriptorSetLayoutBinding samplerLayoutBinding{};
+        samplerLayoutBinding.binding = 1;
+        samplerLayoutBinding.descriptorCount = 1;
+        samplerLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        samplerLayoutBinding.pImmutableSamplers = nullptr;
+        samplerLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+        
+        std::array<VkDescriptorSetLayoutBinding, 2> bindings = {uboLayoutBinding, samplerLayoutBinding};
+
         VkDescriptorSetLayoutCreateInfo layoutInfo{};
         layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-        layoutInfo.bindingCount = 1;
-        layoutInfo.pBindings = &uboLayoutBinding;
+        layoutInfo.bindingCount = bindings.size();
+        layoutInfo.pBindings = bindings.data();
         
         VK_CHECK(vkCreateDescriptorSetLayout(mDevice,&layoutInfo,nullptr,&mDescriptorSetLayout),"failed to create descriptor set layout.");
     }
@@ -403,7 +420,7 @@ namespace ProjectJ{
         desc.vertexShaderPath = "shaders/vert.spv";
         desc.fragmentShaderPath = "shaders/frag.spv";
         desc.attributeStride = sizeof(Vertex);
-        desc.attributeDescriptions.resize(2);
+        desc.attributeDescriptions.resize(3);
         desc.attributeDescriptions[0].binding = 0;
         desc.attributeDescriptions[0].location = 0;
         desc.attributeDescriptions[0].format = VK_FORMAT_R32G32_SFLOAT;
@@ -413,6 +430,11 @@ namespace ProjectJ{
         desc.attributeDescriptions[1].location = 1;
         desc.attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
         desc.attributeDescriptions[1].offset = offsetof(Vertex,color);
+        
+        desc.attributeDescriptions[2].binding = 0;
+        desc.attributeDescriptions[2].location = 2;
+        desc.attributeDescriptions[2].format = VK_FORMAT_R32G32_SFLOAT;
+        desc.attributeDescriptions[2].offset = offsetof(Vertex,texCoord);
 
         desc.extent = mSwapChain->GetExtent();
         desc.pipelineLayout = mPipelineLayout;
@@ -450,15 +472,25 @@ namespace ProjectJ{
             mUniformBuffers[i] = std::make_unique<VulkanUniformBuffer<UniformBufferObject> >();
         }
     }
+    void VulkanRHI::PCreateTextureSampler(){
+        mTexture = TextureLoader::CreateFromPath("textures/texture.jpg");
+        VulkanSamplerDesc desc{};
+        desc.magFilter = VK_FILTER_LINEAR;
+        desc.minFilter = VK_FILTER_LINEAR;
+        desc.u = desc.v = desc.w = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+        mSampler = std::make_shared<VulkanSampler>(desc);
+    }
     void VulkanRHI::PCreateDescriptorPool(){
-        VkDescriptorPoolSize poolSize{};
-        poolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        poolSize.descriptorCount = static_cast<uint32_t>(mSwapChain->GetImageCount());
+        std::array<VkDescriptorPoolSize, 2> poolSize;
+        poolSize[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        poolSize[0].descriptorCount = static_cast<uint32_t>(mSwapChain->GetImageCount());
+        poolSize[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        poolSize[1].descriptorCount = static_cast<uint32_t>(mSwapChain->GetImageCount());
 
         VkDescriptorPoolCreateInfo poolInfo{};
         poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-        poolInfo.poolSizeCount = 1;
-        poolInfo.pPoolSizes = &poolSize;
+        poolInfo.poolSizeCount = poolSize.size();
+        poolInfo.pPoolSizes = poolSize.data();
         poolInfo.maxSets = static_cast<uint32_t>(mSwapChain->GetImageCount());
         VK_CHECK(vkCreateDescriptorPool(mDevice,&poolInfo,nullptr,&mDescriptorPool),"failed to create descriptor pool.");
     }
@@ -474,18 +506,28 @@ namespace ProjectJ{
         VK_CHECK(vkAllocateDescriptorSets(mDevice,&allocInfo,mDescriptorSets.data()),"failed to allocate descriptor sets");
         for(size_t i = 0; i < mSwapChain->GetImageCount(); i++){
             VkDescriptorBufferInfo bufferInfo = mUniformBuffers[i]->GetBufferInfo();
+            VkDescriptorImageInfo imageInfo = mSampler->GetImageInfo(mTexture.get());
 
-            VkWriteDescriptorSet descriptorWrite{};
-            descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-            descriptorWrite.dstSet = mDescriptorSets[i];
-            descriptorWrite.dstBinding = 0;
-            descriptorWrite.dstArrayElement = 0;
-            descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-            descriptorWrite.descriptorCount = 1;
-            descriptorWrite.pBufferInfo = &bufferInfo;
-            descriptorWrite.pImageInfo = nullptr; // Optional
-            descriptorWrite.pTexelBufferView = nullptr; // Optional
-            vkUpdateDescriptorSets(mDevice, 1, &descriptorWrite, 0, nullptr);
+            std::array<VkWriteDescriptorSet, 2> descriptorWrite{};
+            
+            descriptorWrite[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            descriptorWrite[0].dstSet = mDescriptorSets[i];
+            descriptorWrite[0].dstBinding = 0;
+            descriptorWrite[0].dstArrayElement = 0;
+            descriptorWrite[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+            descriptorWrite[0].descriptorCount = 1;
+            descriptorWrite[0].pBufferInfo = &bufferInfo;
+            descriptorWrite[0].pImageInfo = nullptr; // Optional
+            descriptorWrite[0].pTexelBufferView = nullptr; // Optional
+            
+            descriptorWrite[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            descriptorWrite[1].dstSet = mDescriptorSets[i];
+            descriptorWrite[1].dstBinding = 1;
+            descriptorWrite[1].dstArrayElement = 0;
+            descriptorWrite[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+            descriptorWrite[1].descriptorCount = 1;
+            descriptorWrite[1].pImageInfo = &imageInfo; // Optional
+            vkUpdateDescriptorSets(mDevice, descriptorWrite.size(), descriptorWrite.data(), 0, nullptr);
         }
     }
     void VulkanRHI::PPrepareCommandBuffers(){

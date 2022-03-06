@@ -53,8 +53,8 @@ namespace ProjectJ{
     class VulkanStagingBuffer : public VulkanBufferBase{
     public:
         VulkanStagingBuffer::VulkanStagingBuffer(void* data, size_t size);
-        void CopyToDst(const VulkanBufferBase* dstBuffer);
-
+        void CopyToBuffer(const VulkanBufferBase* dstBuffer);
+        void CopyToTexture(const class VulkanTexture* dstTex);
     private:
         VkCommandPool mCommandPool;
         VkQueue mGraphicQueue;

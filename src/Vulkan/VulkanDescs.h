@@ -25,6 +25,7 @@ namespace ProjectJ{
     struct Vertex{
         glm::vec2 pos;
         glm::vec3 color;
+        glm::vec2 texCoord;
     };
     struct UniformBufferObject{
         glm::mat4 model;

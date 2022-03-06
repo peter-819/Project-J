@@ -18,6 +18,7 @@ namespace ProjectJ{
         friend class VulkanStagingBuffer;
         friend class VulkanTexture;
         friend class VulkanQueue;
+        friend class VulkanSampler;
     public:
         VulkanRHI(const VulkanConfig& config);
         ~VulkanRHI();
@@ -41,6 +42,7 @@ namespace ProjectJ{
         void PCreateVertexBuffer();
         void PCreateIndexBuffer();
         void PCreateUniformBuffer();
+        void PCreateTextureSampler();
         void PCreateDescriptorPool();
         void PCreateDescriptorSet();
         void PPrepareCommandBuffers();
@@ -53,44 +55,35 @@ namespace ProjectJ{
         VkDebugUtilsMessengerEXT mDebugMessenger;
         VkPhysicalDevice mPhysicalDevice;
         VkDevice mDevice;
-        // VkQueue mGraphicQueue;
-        // VkQueue mPresentQueue;
         VkSurfaceKHR mSurface;
         
         std::vector<VkFramebuffer> mSwapChainFramebuffers;
         VkDescriptorSetLayout mDescriptorSetLayout;
         VkPipelineLayout mPipelineLayout;
         VkRenderPass mRenderPass;
-        // VkCommandPool mCommandPool;
         std::unique_ptr<VulkanVertexBuffer> mVertexBuffer;
         std::unique_ptr<VulkanIndexBuffer> mIndexBuffer;
         VkDescriptorPool mDescriptorPool;
         std::vector<VkDescriptorSet> mDescriptorSets;
 
         std::vector<std::unique_ptr<VulkanUniformBuffer<UniformBufferObject> > > mUniformBuffers;
-        
-        // std::vector<VkSemaphore> mImageAvailableSemaphores;
-        // std::vector<VkSemaphore> mRenderFinishedSemaphores;
-        // std::vector<VkFence> mInFlightFences;
-        // std::vector<VkFence> mImagesInFlight;
-        // size_t mCurrentFrame = 0;
+        std::shared_ptr<VulkanTexture> mTexture;
+        std::shared_ptr<VulkanSampler> mSampler;
 
-        // std::vector<VkCommandBuffer> mCommandBuffers;
         const std::vector<const char*> mValidationLayers = {
             "VK_LAYER_KHRONOS_validation"
         };
         const std::vector<const char*> mDeviceExtensions = {
             VK_KHR_SWAPCHAIN_EXTENSION_NAME
         };
-        // const int MAX_FRAMES_IN_FLIGHT = 2;
         QueueFamilyIndices mQueueFamilyIndices;
         SwapChainSupportDetails mSwapChainSupportDetails;
 
         const std::vector<Vertex> vertices = {
-            {{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
-            {{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
-            {{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
-            {{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}}
+            {{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {1.0f, 0.0f}},
+            {{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f}},
+            {{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f}},
+            {{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}}
         };
         const std::vector<uint16_t> indices = {
             0,1,2,2,3,0
