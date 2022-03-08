@@ -19,6 +19,7 @@ namespace ProjectJ{
         friend class VulkanTexture;
         friend class VulkanQueue;
         friend class VulkanSampler;
+        template<typename> friend class PipelineResources;
     public:
         VulkanRHI(const VulkanConfig& config);
         ~VulkanRHI();
@@ -35,7 +36,6 @@ namespace ProjectJ{
         void PPickPhysicalDevice();
         void PCreateLogicalDevice();
         void PCreateRenderPass();
-        void PCreateDescriptorSetLayout();
         void PCreateGraphicsPipeline();
         void PCreateFramebuffers();
         void PCreateCommandPool();
@@ -43,7 +43,6 @@ namespace ProjectJ{
         void PCreateIndexBuffer();
         void PCreateUniformBuffer();
         void PCreateTextureSampler();
-        void PCreateDescriptorPool();
         void PCreateDescriptorSet();
         void PPrepareCommandBuffers();
 
@@ -58,17 +57,24 @@ namespace ProjectJ{
         VkSurfaceKHR mSurface;
         
         std::vector<VkFramebuffer> mSwapChainFramebuffers;
-        VkDescriptorSetLayout mDescriptorSetLayout;
+        // VkDescriptorSetLayout mDescriptorSetLayout;
         VkPipelineLayout mPipelineLayout;
         VkRenderPass mRenderPass;
         std::unique_ptr<VulkanVertexBuffer> mVertexBuffer;
         std::unique_ptr<VulkanIndexBuffer> mIndexBuffer;
-        VkDescriptorPool mDescriptorPool;
+        // VkDescriptorPool mDescriptorPool;
         std::vector<VkDescriptorSet> mDescriptorSets;
 
         std::vector<std::unique_ptr<VulkanUniformBuffer<UniformBufferObject> > > mUniformBuffers;
         std::shared_ptr<VulkanTextureSampler> mTextureSampler;
         // std::shared_ptr<VulkanSampler> mSampler;
+
+        struct Shader_Param{
+            std::shared_ptr<VulkanDynamicUniformBuffer<UniformBufferObject> > uniformBuffer;
+            std::shared_ptr<VulkanTextureSampler> textureSampler;
+        };
+        std::unique_ptr<PipelineResources<Shader_Param> > mPipelineResource;
+        
 
         const std::vector<const char*> mValidationLayers = {
             "VK_LAYER_KHRONOS_validation"

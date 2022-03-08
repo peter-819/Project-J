@@ -115,7 +115,7 @@ namespace ProjectJ{
         }
     }
 
-    //------------------------------------ScopedFrame-----------------------------------------//
+    //------------------------------------ ScopedFrame -----------------------------------------//
     ScopedFrame::ScopedFrame(std::shared_ptr<VulkanQueue> queue){
         Queue = queue;
         Queue->BeginFrame();

@@ -22,10 +22,11 @@ namespace ProjectJ{
     template<class TUniformBufferClass, size_t Size = sizeof TUniformBufferClass>
     class VulkanUniformBuffer : public VulkanBufferBase{
     public:
-        VulkanUniformBuffer()
+        VulkanUniformBuffer(VkShaderStageFlags stageBit)
             :VulkanBufferBase(Size,
             VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT){
+            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT), 
+            mStageBit(stageBit){
                 
             }
 
@@ -46,9 +47,14 @@ namespace ProjectJ{
             info.range = Size;
             return info;
         }
+        void GetStageBit() const {return mStageBit;}
     private:
         TUniformBufferClass mCpuBuffer;
+        VkShaderStageFlags mStageBit;
     };
+
+    template<class T>
+    class VulkanDynamicUniformBuffer : public VulkanUniformBuffer<T> {};
 
     class VulkanStagingBuffer : public VulkanBufferBase{
     public:
@@ -71,4 +77,13 @@ namespace ProjectJ{
         VulkanIndexBuffer(void* data, size_t size);
         VulkanIndexBuffer(size_t size);
     };
+
+    template<typename>
+    struct is_uniform_buffer : std::false_type {};
+    
+    template<typename UB, size_t Size>
+    struct is_uniform_buffer<std::shared_ptr<VulkanUniformBuffer<UB, Size> > > : std::true_type {};
+    template<typename UB>
+    struct is_uniform_buffer<std::shared_ptr<VulkanDynamicUniformBuffer<UB> > > : std::true_type {};
+
 }

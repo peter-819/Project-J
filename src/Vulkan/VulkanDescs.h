@@ -35,12 +35,7 @@ namespace ProjectJ{
     struct PSUniformBufferObject{
         glm::vec3 color;
     };
-    struct foo{
-        int a;
-        int b;
-        float c;
-        double d;
-    };
+    
     template <unsigned I>
     struct tag : tag<I - 1> {};
     
@@ -91,22 +86,22 @@ namespace ProjectJ{
       if constexpr (size<T>() == 4u)
       {
         const auto& [m0, m1, m2, m3] = v;
-        f(m0); f(m1); f(m2); f(m3);
+        f(0, m0); f(1, m1); f(2, m2); f(3, m3);
       }
       else if constexpr (size<T>() == 3u)
       {
         const auto& [m0, m1, m2] = v;
-        f(m0); f(m1); f(m2);
+        f(0, m0); f(1, m1); f(2, m2);
       }
       else if constexpr (size<T>() == 2u)
       {
         const auto& [m0, m1] = v;
-        f(m0); f(m1);
+        f(0, m0); f(1, m1);
       }
       else if constexpr (size<T>() == 1u)
       {
         const auto& [m0] = v;
-        f(m0);
+        f(0, m0);
       }
     }
 }

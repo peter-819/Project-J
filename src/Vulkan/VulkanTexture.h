@@ -36,16 +36,19 @@ namespace ProjectJ{
 
     class VulkanTextureSampler : public VulkanTexture, public VulkanSampler {
     public:
-        VulkanTextureSampler(uint32_t width,uint32_t height, VkFormat format, const VulkanSamplerDesc& desc);
+        VulkanTextureSampler(uint32_t width,uint32_t height, VkFormat format, const VulkanSamplerDesc& desc, VkShaderStageFlags stageBit);
 
         VkDescriptorImageInfo GetImageInfo() const;
+        VkShaderStageFlags GetStageBit() const {return mStageBit;}
+    private:
+        VkShaderStageFlags mStageBit;
     };
 
     
     class TextureLoader{
     public:
         static std::shared_ptr<VulkanTexture> CreateTexFromPath(const std::string& path);
-        static std::shared_ptr<VulkanTextureSampler> CreateTexSamplerFromPath(const std::string& path, const VulkanSamplerDesc& desc);
-
+        static std::shared_ptr<VulkanTextureSampler> CreateTexSamplerFromPath(const std::string& path, const VulkanSamplerDesc& desc, VkShaderStageFlags stageBit);
+        
     };
 }

@@ -150,8 +150,8 @@ namespace ProjectJ{
     }
 
 
-    VulkanTextureSampler::VulkanTextureSampler(uint32_t width,uint32_t height, VkFormat format, const VulkanSamplerDesc& desc)
-        :VulkanTexture(width,height,format),VulkanSampler(desc) {
+    VulkanTextureSampler::VulkanTextureSampler(uint32_t width,uint32_t height, VkFormat format, const VulkanSamplerDesc& desc, VkShaderStageFlags stageBit)
+        :VulkanTexture(width,height,format),VulkanSampler(desc), mStageBit(stageBit){
 
     }    
     VkDescriptorImageInfo VulkanTextureSampler::GetImageInfo() const {
@@ -183,7 +183,7 @@ namespace ProjectJ{
         return texture;
     }
 
-    std::shared_ptr<VulkanTextureSampler> TextureLoader::CreateTexSamplerFromPath(const std::string& path, const VulkanSamplerDesc& desc){
+    std::shared_ptr<VulkanTextureSampler> TextureLoader::CreateTexSamplerFromPath(const std::string& path, const VulkanSamplerDesc& desc, VkShaderStageFlags stageBit){
         int texWidth, texHeight, texChannels;
         stbi_uc* pixels = stbi_load("textures/texture.jpg", &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
         VkDeviceSize imageSize = texWidth * texHeight * 4;
@@ -193,7 +193,7 @@ namespace ProjectJ{
         }
         auto stagingBuffer = std::make_shared<VulkanStagingBuffer>(pixels,imageSize);
         
-        auto texture = std::make_shared<VulkanTextureSampler>(texWidth,texHeight, VK_FORMAT_R8G8B8A8_SRGB, desc);// TODO
+        auto texture = std::make_shared<VulkanTextureSampler>(texWidth,texHeight, VK_FORMAT_R8G8B8A8_SRGB, desc, stageBit);// TODO
         
         texture->LayoutTransition(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
         stagingBuffer->CopyToTexture(texture.get());
