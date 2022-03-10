@@ -1,8 +1,7 @@
 #pragma once
 #include "VulkanInclude.h"
 #include "core/Reflection.hpp"
-#include "VulkanBuffers.h"
-#include "VulkanTexture.h"
+#include "VulkanResources.h"
 #include "core/RHI.h"
 #include <memory>
 

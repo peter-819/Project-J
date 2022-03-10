@@ -5,6 +5,20 @@
 #include "core/Reflection.hpp"
 
 namespace ProjectJ{
+    class ResourceManager{
+    public:
+        template<class TUniformBuffer>
+        void AllocDynamicUniformBuffer(const std::string& name);
+
+        template<class TUniformBuffer>
+        void AllocStaticUniformBuffer(const std::string& name);
+
+        static std::shared_ptr<VulkanTexture> CreateTexFromPath(const std::string& path);
+        static std::shared_ptr<VulkanTextureSampler> CreateTexSamplerFromPath(const std::string& path, const VulkanSamplerDesc& desc, VkShaderStageFlags stageBit);
+        
+    private:
+    };
+
     class VulkanCommandBuffer{
     public:
         void BeginRenderPass();

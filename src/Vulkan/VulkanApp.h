@@ -1,9 +1,8 @@
 #pragma once
 #include "VulkanDescs.h"
 #include "VulkanSwapChain.h"
-#include "VulkanBuffers.h"
 #include "VulkanPSO.h"
-#include "VulkanTexture.h"
+#include "VulkanResources.h"
 #include "VulkanCommand.h"
 #include "VulkanShader.h"
 #include <optional>
