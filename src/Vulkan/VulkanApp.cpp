@@ -58,7 +58,7 @@ namespace ProjectJ{
         VulkanSwapChainDesc desc{};
         desc.window = mConfig.window;
         mSwapChain = std::make_shared<VulkanSwapChain>(mDevice,mPhysicalDevice,mSurface,mQueueFamilyIndices,desc);
-        mPipelineResource = std::make_unique<PipelineResources<Shader_Param> >();
+        mTestShader = std::make_unique<TestShader>();
         PCreateRenderPass();
         PCreateGraphicsPipeline();
         PCreateFramebuffers();
@@ -68,6 +68,7 @@ namespace ProjectJ{
         PCreateUniformBuffer();
         PCreateTextureSampler();
         PCreateDescriptorSet();
+        mTestCommandBuffer = std::make_shared<VulkanCommandBuffer>();
         PPrepareCommandBuffers();
     }
     void VulkanRHI::Cleanup(){
@@ -79,7 +80,7 @@ namespace ProjectJ{
         for(size_t i = 0; i < mSwapChain->GetImageCount(); i++){
             mUniformBuffers[i].reset();
         }
-        mPipelineResource.reset();
+        mTestShader.reset();
         // vkDestroyDescriptorPool(mDevice,mDescriptorPool,nullptr);
         // vkDestroyDescriptorSetLayout(mDevice,mDescriptorSetLayout,nullptr);
         
@@ -385,7 +386,7 @@ namespace ProjectJ{
         VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
         pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
         pipelineLayoutInfo.setLayoutCount = 1;
-        pipelineLayoutInfo.pSetLayouts = &mPipelineResource->GetDescriptorSetLayout();
+        pipelineLayoutInfo.pSetLayouts = &mTestShader->GetDescriptorSetLayout();
         pipelineLayoutInfo.pushConstantRangeCount = 0; // Optional
         pipelineLayoutInfo.pPushConstantRanges = nullptr; // Optional
 
@@ -455,10 +456,10 @@ namespace ProjectJ{
         mTextureSampler = TextureLoader::CreateTexSamplerFromPath("textures/texture.jpg", desc, VK_SHADER_STAGE_FRAGMENT_BIT);
     }
     void VulkanRHI::PCreateDescriptorSet(){
-        std::vector<VkDescriptorSetLayout> layouts(mSwapChain->GetImageCount(),mPipelineResource->GetDescriptorSetLayout());
+        std::vector<VkDescriptorSetLayout> layouts(mSwapChain->GetImageCount(),mTestShader->GetDescriptorSetLayout());
         VkDescriptorSetAllocateInfo allocInfo{};
         allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-        allocInfo.descriptorPool = mPipelineResource->GetDescriptorPool();
+        allocInfo.descriptorPool = mTestShader->GetDescriptorPool();
         allocInfo.descriptorSetCount = static_cast<uint32_t>(mSwapChain->GetImageCount());
         allocInfo.pSetLayouts = layouts.data();
         
@@ -491,6 +492,11 @@ namespace ProjectJ{
         }
     }
     void VulkanRHI::PPrepareCommandBuffers(){
+        // mTestCommandBuffer->BeginRenderPass();
+        mTestCommandBuffer->BindShader(mTestShader.get());
+        auto p = ShaderParam<TestShader>{};
+        mTestCommandBuffer->SetShaderParam(p);
+
         auto prepareFunc = [this](uint32_t index, VkCommandBuffer& commandBuffer){
             VkCommandBufferBeginInfo beginInfo{};
             beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;

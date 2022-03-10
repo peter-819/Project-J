@@ -19,6 +19,11 @@ namespace ProjectJ{
         auto findMemoryType = [this](uint32_t typeFilter, VkMemoryPropertyFlags properties){
             VkPhysicalDeviceMemoryProperties memProperties;
             vkGetPhysicalDeviceMemoryProperties(mPhysicalDevice,&memProperties);
+
+            VkPhysicalDeviceProperties deviceProperties;
+            vkGetPhysicalDeviceProperties(mPhysicalDevice,&deviceProperties);
+            JLOG_INFO("physical limits: {}", deviceProperties.limits.nonCoherentAtomSize);
+            
             for(uint32_t i = 0; i < memProperties.memoryTypeCount; i++){
                 if(typeFilter & (1 << i) && (memProperties.memoryTypes[i].propertyFlags & properties) == properties){
                     return i;
@@ -34,6 +39,8 @@ namespace ProjectJ{
             memRequirements.memoryTypeBits,
             properties
         );
+        
+        JLOG_INFO("{} {}",size,allocInfo.allocationSize);
         VK_CHECK(vkAllocateMemory(mDevice,&allocInfo,nullptr,&mMemory),"failed to allocate vertex buffer memory.");
         vkBindBufferMemory(mDevice,mBuffer,mMemory,0);
     }

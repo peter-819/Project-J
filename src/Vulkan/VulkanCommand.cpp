@@ -2,6 +2,7 @@
 #include "VulkanCommand.h"
 
 namespace ProjectJ{
+
     VulkanQueue::VulkanQueue(){    
         vkGetDeviceQueue(RHI::Get().mDevice,RHI::Get().mQueueFamilyIndices.graphicsFamily.value(),0,&mGraphicQueue);
         vkGetDeviceQueue(RHI::Get().mDevice,RHI::Get().mQueueFamilyIndices.presentFamily.value(),0,&mPresentQueue);

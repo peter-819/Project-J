@@ -1,13 +1,12 @@
 #pragma once
 #include "VulkanInclude.h"
 #include "VulkanDescs.h"
-
 namespace ProjectJ{
     class VulkanBufferBase{
     public:
         VulkanBufferBase() = delete;
         VulkanBufferBase(size_t size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties);
-        ~VulkanBufferBase();
+        virtual ~VulkanBufferBase();
     protected:
         VkDeviceMemory mMemory;
         VkDevice mDevice;

@@ -5,6 +5,7 @@
 #include "VulkanPSO.h"
 #include "VulkanTexture.h"
 #include "VulkanCommand.h"
+#include "VulkanShader.h"
 #include <optional>
 
 namespace ProjectJ{
@@ -19,7 +20,7 @@ namespace ProjectJ{
         friend class VulkanTexture;
         friend class VulkanQueue;
         friend class VulkanSampler;
-        template<typename> friend class PipelineResources;
+        template<typename> friend class VulkanShader;
     public:
         VulkanRHI(const VulkanConfig& config);
         ~VulkanRHI();
@@ -57,24 +58,15 @@ namespace ProjectJ{
         VkSurfaceKHR mSurface;
         
         std::vector<VkFramebuffer> mSwapChainFramebuffers;
-        // VkDescriptorSetLayout mDescriptorSetLayout;
         VkPipelineLayout mPipelineLayout;
         VkRenderPass mRenderPass;
         std::unique_ptr<VulkanVertexBuffer> mVertexBuffer;
         std::unique_ptr<VulkanIndexBuffer> mIndexBuffer;
-        // VkDescriptorPool mDescriptorPool;
         std::vector<VkDescriptorSet> mDescriptorSets;
 
         std::vector<std::unique_ptr<VulkanUniformBuffer<UniformBufferObject> > > mUniformBuffers;
         std::shared_ptr<VulkanTextureSampler> mTextureSampler;
-        // std::shared_ptr<VulkanSampler> mSampler;
-
-        struct Shader_Param{
-            std::shared_ptr<VulkanDynamicUniformBuffer<UniformBufferObject> > uniformBuffer;
-            std::shared_ptr<VulkanTextureSampler> textureSampler;
-        };
-        std::unique_ptr<PipelineResources<Shader_Param> > mPipelineResource;
-        
+        std::unique_ptr<TestShader> mTestShader;
 
         const std::vector<const char*> mValidationLayers = {
             "VK_LAYER_KHRONOS_validation"
@@ -98,6 +90,7 @@ namespace ProjectJ{
         std::shared_ptr<VulkanSwapChain> mSwapChain;
         std::shared_ptr<VulkanPSO> mGraphicPipeline;
         std::shared_ptr<VulkanQueue> mQueue;
+        std::shared_ptr<VulkanCommandBuffer> mTestCommandBuffer;
     };
 
 }
